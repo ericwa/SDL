@@ -122,6 +122,15 @@ WIN_CreateDevice(int devindex)
         data->CloseTouchInputHandle = (BOOL (WINAPI *)(HTOUCHINPUT)) SDL_LoadFunction(data->userDLL, "CloseTouchInputHandle");
         data->GetTouchInputInfo = (BOOL (WINAPI *)(HTOUCHINPUT, UINT, PTOUCHINPUT, int)) SDL_LoadFunction(data->userDLL, "GetTouchInputInfo");
         data->RegisterTouchWindow = (BOOL (WINAPI *)(HWND, ULONG)) SDL_LoadFunction(data->userDLL, "RegisterTouchWindow");
+        data->SetProcessDPIAware = (BOOL (WINAPI *)(void)) SDL_LoadFunction(data->userDLL, "SetProcessDPIAware");
+        data->SetProcessDpiAwarenessContext = (BOOL (WINAPI *)(DPI_AWARENESS_CONTEXT)) SDL_LoadFunction(data->userDLL, "SetProcessDpiAwarenessContext");
+        data->SetThreadDpiAwarenessContext = (DPI_AWARENESS_CONTEXT (WINAPI *)(DPI_AWARENESS_CONTEXT)) SDL_LoadFunction(data->userDLL, "SetThreadDpiAwarenessContext");
+        data->GetThreadDpiAwarenessContext = (DPI_AWARENESS_CONTEXT (WINAPI *)(void)) SDL_LoadFunction(data->userDLL, "GetThreadDpiAwarenessContext");
+        data->GetAwarenessFromDpiAwarenessContext = (DPI_AWARENESS (WINAPI *)(DPI_AWARENESS_CONTEXT)) SDL_LoadFunction(data->userDLL, "GetAwarenessFromDpiAwarenessContext");
+        data->EnableNonClientDpiScaling = (BOOL (WINAPI *)(HWND)) SDL_LoadFunction(data->userDLL, "EnableNonClientDpiScaling");
+        data->AdjustWindowRectExForDpi = (BOOL (WINAPI *)(LPRECT, DWORD, BOOL, DWORD, UINT)) SDL_LoadFunction(data->userDLL, "AdjustWindowRectExForDpi");
+        data->GetDpiForWindow = (UINT (WINAPI *)(HWND)) SDL_LoadFunction(data->userDLL, "GetDpiForWindow");
+        data->AreDpiAwarenessContextsEqual = (BOOL (WINAPI *)(DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT)) SDL_LoadFunction(data->userDLL, "AreDpiAwarenessContextsEqual");
     } else {
         SDL_ClearError();
     }
@@ -129,6 +138,7 @@ WIN_CreateDevice(int devindex)
     data->shcoreDLL = SDL_LoadObject("SHCORE.DLL");
     if (data->shcoreDLL) {
         data->GetDpiForMonitor = (HRESULT (WINAPI *)(HMONITOR, MONITOR_DPI_TYPE, UINT *, UINT *)) SDL_LoadFunction(data->shcoreDLL, "GetDpiForMonitor");
+        data->SetProcessDpiAwareness = (HRESULT (WINAPI *)(PROCESS_DPI_AWARENESS)) SDL_LoadFunction(data->shcoreDLL, "SetProcessDpiAwareness");
     } else {
         SDL_ClearError();
     }
@@ -190,6 +200,7 @@ WIN_CreateDevice(int devindex)
     device->GL_UnloadLibrary = WIN_GL_UnloadLibrary;
     device->GL_CreateContext = WIN_GL_CreateContext;
     device->GL_MakeCurrent = WIN_GL_MakeCurrent;
+    device->GL_GetDrawableSize = WIN_GL_GetDrawableSize;
     device->GL_SetSwapInterval = WIN_GL_SetSwapInterval;
     device->GL_GetSwapInterval = WIN_GL_GetSwapInterval;
     device->GL_SwapWindow = WIN_GL_SwapWindow;
@@ -231,10 +242,61 @@ VideoBootStrap WINDOWS_bootstrap = {
     "windows", "SDL Windows video driver", WIN_CreateDevice
 };
 
+static void
+WIN_SetDPIAware(_THIS)
+{
+    SDL_VideoData *data = SDL_static_cast(SDL_VideoData *, _this->driverdata);
+    if (data->SetProcessDpiAwarenessContext) {
+        /* Windows 10 Anniversary Update+ */
+        /* First, try the Windows 10 Creators Update version */
+        BOOL result = data->SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        if (!result) {
+            result = data->SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
+        }
+
+        /*
+        NOTE: The above calls will fail if the DPI awareness was already set outside of SDL.
+        It doesn't matter if they fail, we will just use whatever DPI awareness level was set externally.
+        */
+        data->highdpi_enabled = SDL_TRUE;
+    } else if (data->SetProcessDpiAwareness) {
+        /* Windows 8.1-Windows 10 */
+        HRESULT result = data->SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+
+        data->highdpi_enabled = SDL_TRUE;
+    } else if (data->SetProcessDPIAware) {
+        /* Vista-Windows 8.0 */
+        BOOL success = data->SetProcessDPIAware();
+
+        data->highdpi_enabled = SDL_TRUE;
+    }
+
+    /* NOTE: we won't set data->highdpi_enabled below Vista.
+    In theory we could still check LOGPIXELSX/Y on XP. */
+}
+
 int
 WIN_VideoInit(_THIS)
 {
     SDL_VideoData *data = (SDL_VideoData *) _this->driverdata;
+
+    /* Set the process DPI awareness */
+    if (SDL_GetHintBoolean(SDL_HINT_VIDEO_ALLOW_HIGHDPI, SDL_FALSE)) {
+        WIN_SetDPIAware(_this);
+    }
+
+    /* Cache LOGPIXELSX/LOGPIXELSY. */
+    {
+        HDC hdc = GetDC(NULL);
+        if (hdc) {
+            data->system_xdpi = GetDeviceCaps(hdc, LOGPIXELSX);
+            data->system_ydpi = GetDeviceCaps(hdc, LOGPIXELSY);
+            ReleaseDC(NULL, hdc);
+        } else {
+            data->system_xdpi = 96;
+            data->system_ydpi = 96;
+        }
+    }
 
     if (WIN_InitModes(_this) < 0) {
         return -1;

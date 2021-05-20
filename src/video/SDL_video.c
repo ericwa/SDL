@@ -1517,6 +1517,11 @@ SDL_CreateWindow(const char *title, int x, int y, int w, int h, Uint32 flags)
         }
     }
 
+    /* This hint adds SDL_WINDOW_ALLOW_HIGHDPI to all windows. */
+    if (SDL_GetHintBoolean(SDL_HINT_VIDEO_ALLOW_HIGHDPI, SDL_FALSE)) {
+        flags |= SDL_WINDOW_ALLOW_HIGHDPI;
+    }
+
     if (flags & SDL_WINDOW_VULKAN) {
         if (!_this->Vulkan_CreateSurface) {
             SDL_SetError("Vulkan support is either not configured in SDL "

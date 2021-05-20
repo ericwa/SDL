@@ -33,6 +33,7 @@
 #include "../../events/SDL_touch_c.h"
 #include "../../events/scancodes_windows.h"
 #include "SDL_hints.h"
+#include "SDL_log.h"
 
 /* Dropfile support */
 #include <shellapi.h>
@@ -50,6 +51,8 @@
 #include <stdio.h>
 #include "wmmsg.h"
 #endif
+
+/* #define HIGHDPI_DEBUG */
 
 /* Masks for processing the windows KEYDOWN and KEYUP messages */
 #define REPEATED_KEYMASK    (1<<30)
@@ -84,6 +87,12 @@
 #endif
 #ifndef WM_UNICHAR
 #define WM_UNICHAR 0x0109
+#endif
+#ifndef WM_DPICHANGED
+#define WM_DPICHANGED 0x02E0
+#endif
+#ifndef WM_GETDPISCALEDSIZE
+#define WM_GETDPISCALEDSIZE 0x02E4
 #endif
 
 #ifndef IS_HIGH_SURROGATE
@@ -648,6 +657,24 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         data = (SDL_WindowData *) GetProp(hwnd, TEXT("SDL_WindowData"));
     }
     if (!data) {
+        /* Request that windows scale the non-client area when moving between monitors.
+           This is only for Windows 10 Anniversary Update.
+           In the Windows 10 Creators Update, this is the default behaviour with a per-monitor V2 context.
+        */
+        switch (msg) {
+            case WM_NCCREATE:
+                {
+                    SDL_VideoDevice *device = SDL_GetVideoDevice();
+                    if (device && device->driverdata) {
+                        SDL_VideoData *data = SDL_static_cast(SDL_VideoData *, device->driverdata);
+                        if (data->highdpi_enabled && data->EnableNonClientDpiScaling) {
+                            data->EnableNonClientDpiScaling(hwnd);
+                        }
+                    }
+                }
+            break;
+        }
+
         return CallWindowProc(DefWindowProc, hwnd, msg, wParam, lParam);
     }
 
@@ -733,7 +760,12 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 /* Only generate mouse events for real mouse */
                 if (GetMouseMessageSource() != SDL_MOUSE_EVENT_SOURCE_TOUCH &&
                     lParam != data->last_pointer_update) {
-                    SDL_SendMouseMotion(data->window, 0, 0, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+                    int x = GET_X_LPARAM(lParam);
+                    int y = GET_Y_LPARAM(lParam);
+
+                    WIN_ClientPointToSDL(data->window, &x, &y);
+
+                    SDL_SendMouseMotion(data->window, 0, 0, x, y);
                 }
             }
         }
@@ -1031,6 +1063,7 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int w, h;
             int min_w, min_h;
             int max_w, max_h;
+            int unused_x, unused_y;
             BOOL constrain_max_size;
 
             if (SDL_IsShapedWindow(data->window)) {
@@ -1052,6 +1085,12 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             SDL_GetWindowMinimumSize(data->window, &min_w, &min_h);
             SDL_GetWindowMaximumSize(data->window, &max_w, &max_h);
 
+            /* Convert w, h, min_w, min_h, max_w, max_h to unscaled.
+               We can treat them as a point in the client area. */
+            WIN_ClientPointFromSDL(data->window, &w, &h);
+            WIN_ClientPointFromSDL(data->window, &min_w, &min_h);
+            WIN_ClientPointFromSDL(data->window, &max_w, &max_h);
+
             /* Store in min_w and min_h difference between current size and minimal
                size so we don't need to call AdjustWindowRectEx twice */
             min_w -= w;
@@ -1064,23 +1103,10 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 constrain_max_size = FALSE;
             }
 
-            if (!(SDL_GetWindowFlags(data->window) & SDL_WINDOW_BORDERLESS)) {
-                LONG style = GetWindowLong(hwnd, GWL_STYLE);
-                /* DJM - according to the docs for GetMenu(), the
-                   return value is undefined if hwnd is a child window.
-                   Apparently it's too difficult for MS to check
-                   inside their function, so I have to do it here.
-                 */
-                BOOL menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
-                size.top = 0;
-                size.left = 0;
-                size.bottom = h;
-                size.right = w;
-
-                AdjustWindowRectEx(&size, style, menu, 0);
-                w = size.right - size.left;
-                h = size.bottom - size.top;
-            }
+            /* Expand w/h to include the frame. */
+            unused_x = 0;
+            unused_y = 0;
+            WIN_AdjustWindowRectWithRect(data->window, &unused_x, &unused_y, &w, &h);
 
             /* Fix our size to the current size */
             info = (MINMAXINFO *) lParam;
@@ -1141,11 +1167,26 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             x = rect.left;
             y = rect.top;
-            SDL_SendWindowEvent(data->window, SDL_WINDOWEVENT_MOVED, x, y);
-
             w = rect.right - rect.left;
             h = rect.bottom - rect.top;
+            WIN_ScreenRectToSDL(&x, &y, &w, &h);
+
+            SDL_SendWindowEvent(data->window, SDL_WINDOWEVENT_MOVED, x, y);
+
+            /* NOTE: important to convert w/h from SDL (points) to Windows (pixels) using 
+               WIN_ClientPointToSDL, which uses the window's actual
+               DPI value, rather than WIN_ScreenRectToSDL which guesses. */
+            w = rect.right - rect.left;
+            h = rect.bottom - rect.top;
+            WIN_ClientPointToSDL(data->window, &w, &h);
+
             SDL_SendWindowEvent(data->window, SDL_WINDOWEVENT_RESIZED, w, h);
+
+#ifdef HIGHDPI_DEBUG
+            SDL_Log("WM_WINDOWPOSCHANGED: Windows client rect (pixels): (%d, %d) (%d x %d)\tSDL client rect (points): (%d, %d) (%d x %d)",
+                rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
+                x, y, w, h);
+#endif
 
             /* Forces a WM_PAINT event */
             InvalidateRect(hwnd, NULL, FALSE);
@@ -1364,7 +1405,10 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (window->hit_test) {
                 POINT winpoint = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
                 if (ScreenToClient(hwnd, &winpoint)) {
-                    const SDL_Point point = { (int) winpoint.x, (int) winpoint.y };
+                    int x = (int) winpoint.x;
+                    int y = (int) winpoint.y;
+                    WIN_ClientPointToSDL(data->window, &x, &y);
+                    const SDL_Point point = { x, y };
                     const SDL_HitTestResult rc = window->hit_test(window, &point, window->hit_test_data);
                     switch (rc) {
                         #define POST_HIT_TEST(ret) { SDL_SendWindowEvent(data->window, SDL_WINDOWEVENT_HIT_TEST, 0, 0); return ret; }
@@ -1383,6 +1427,135 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
                 /* If we didn't return, this will call DefWindowProc below. */
             }
+        }
+        break;
+
+    case WM_GETDPISCALEDSIZE: /* Windows 10 Creators Update+ */
+        /* GetDpiForWindow and AdjustWindowRectExForDpi will be present, but check anyway. */
+        if (data->videodata->highdpi_enabled 
+            && data->videodata->GetDpiForWindow
+            && data->videodata->AdjustWindowRectExForDpi) {
+
+            /*
+            Windows expects applications to scale their window rects linearly
+            when dragging between monitors with different DPI's.
+            e.g. a 100x100 window dragged to a 200% scaled monitor
+            becomes 200x200.
+
+            For SDL, we instead want the client size to scale linearly.
+            This is not the same as the window rect scaling linearly,
+            because Windows doesn't scale the non-client area (titlebar etc.)
+            linearly. So, we need to handle this message to request custom
+            scaling.
+            */
+            
+            const int potentialDPI = (int)wParam;
+            const int currentDPI = (int)data->videodata->GetDpiForWindow(hwnd);
+            SIZE *sizeInOut = (SIZE *)lParam;
+
+            int x, y, w, h;
+            int frame_w, frame_h;
+            int query_client_w_win, query_client_h_win;
+
+#ifdef HIGHDPI_DEBUG
+            SDL_Log("WM_GETDPISCALEDSIZE: current DPI: %d potential DPI: %d. input size: (%dx%d)", currentDPI, potentialDPI, sizeInOut->cx, sizeInOut->cy);
+#endif
+
+            WIN_AdjustWindowRect(data->window, &x, &y, &w, &h, SDL_TRUE);
+
+            /* get the frame size */
+            frame_w = w - MulDiv(data->window->w, currentDPI, 96);
+            frame_h = h - MulDiv(data->window->h, currentDPI, 96);
+
+            query_client_w_win = sizeInOut->cx - frame_w;
+            query_client_h_win = sizeInOut->cy - frame_h;
+
+            /* convert to new dpi */
+            query_client_w_win = MulDiv(query_client_w_win, potentialDPI, currentDPI);
+            query_client_h_win = MulDiv(query_client_h_win, potentialDPI, currentDPI);
+
+            /* re-add the window frame in the new DPI */
+            {
+                DWORD style = GetWindowLong(hwnd, GWL_STYLE);
+                BOOL menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
+                RECT rect;
+
+                rect.left = 0;
+                rect.top = 0;
+                rect.right = query_client_w_win;
+                rect.bottom = query_client_h_win;
+
+                if (!(data->window->flags & SDL_WINDOW_BORDERLESS))
+                    data->videodata->AdjustWindowRectExForDpi(&rect, style, menu, 0, potentialDPI);
+
+                /* This is supposed to control the suggested rect param of WM_DPICHANGED */
+                sizeInOut->cx = rect.right - rect.left;
+                sizeInOut->cy = rect.bottom - rect.top;
+            }
+
+#ifdef HIGHDPI_DEBUG
+            SDL_Log("WM_GETDPISCALEDSIZE: output size: (%dx%d)", sizeInOut->cx, sizeInOut->cy);
+#endif
+            return TRUE;
+        }
+        break;
+
+    case WM_DPICHANGED: /* Windows 8.1+ */
+        if (data->videodata->highdpi_enabled) {
+            const int newDPI = HIWORD(wParam);
+            RECT* const suggestedRect = (RECT*)lParam;
+            int x, y, w, h;
+
+#ifdef HIGHDPI_DEBUG
+            SDL_Log("WM_DPICHANGED: %d to %d\tsuggested rect: (%d, %d), (%dx%d)\n", 
+                data->scaling_xdpi, newDPI,
+                suggestedRect->left, suggestedRect->top, suggestedRect->right - suggestedRect->left, suggestedRect->bottom - suggestedRect->top);
+#endif
+
+            /* update the cached DPI value for this window */
+            data->scaling_xdpi = newDPI;
+            data->scaling_ydpi = newDPI;
+
+            if (data->videodata->AreDpiAwarenessContextsEqual
+                && data->videodata->GetThreadDpiAwarenessContext
+                && data->videodata->AreDpiAwarenessContextsEqual(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, data->videodata->GetThreadDpiAwarenessContext()))
+            {
+                /*
+                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 means that
+                WM_GETDPISCALEDSIZE will have been called, so we can use suggestedRect.
+                */
+                w = suggestedRect->right - suggestedRect->left;
+                h = suggestedRect->bottom - suggestedRect->top;
+            } else {
+                /*
+                The OS does not support WM_GETDPISCALEDSIZE, so we can't use suggestedRect.
+
+                (suggestedRect is calculated by default to preserves the apparent size of the window rect,
+                whereas we want to preserve the apparent size of the client rect.)
+                */
+                WIN_AdjustWindowRect(data->window, &x, &y, &w, &h, SDL_TRUE);
+            }
+            
+#ifdef HIGHDPI_DEBUG
+            SDL_Log("WM_DPICHANGED: current SDL window size: (%dx%d)\tcalling SetWindowPos: (%d, %d), (%dx%d)\n",
+                data->window->w, data->window->h,
+                suggestedRect->left, suggestedRect->top, w, h);
+#endif
+
+            /* clear the window size, to cause us to send a SDL_WINDOWEVENT_RESIZED event in WM_WINDOWPOSCHANGED */
+            data->window->w = 0;
+            data->window->h = 0;
+
+            data->expected_resize = SDL_TRUE;
+            SetWindowPos(hwnd,
+                NULL,
+                suggestedRect->left,
+                suggestedRect->top,
+                w,
+                h,
+                SWP_NOZORDER | SWP_NOACTIVATE);
+            data->expected_resize = SDL_FALSE;
+            return 0;
         }
         break;
     }
