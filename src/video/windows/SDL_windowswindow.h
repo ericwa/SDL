@@ -55,8 +55,15 @@ typedef struct
 #if SDL_VIDEO_OPENGL_EGL  
     EGLSurface egl_surface;
 #endif
+    /* NOTE: differing xdpi and ydpi is legacy-only, but we still support it.
+       On Windows 8.1+ it shouldn't happen (GetDpiForMonitor docs promise xdpi and ydpi are equal)
+       and on Windows 10+ it won't (GetDpiForWindow has a single return value).*/
+    int scaling_xdpi;
+    int scaling_ydpi;
 } SDL_WindowData;
 
+extern void WIN_AdjustWindowRectWithRect(SDL_Window *window, int *x, int *y, int *width, int *height);
+extern void WIN_AdjustWindowRect(SDL_Window *window, int *x, int *y, int *width, int *height, SDL_bool use_current);
 extern int WIN_CreateWindow(_THIS, SDL_Window * window);
 extern int WIN_CreateWindowFrom(_THIS, SDL_Window * window, const void *data);
 extern void WIN_SetWindowTitle(_THIS, SDL_Window * window);
@@ -85,6 +92,9 @@ extern SDL_bool WIN_GetWindowWMInfo(_THIS, SDL_Window * window,
 extern void WIN_OnWindowEnter(_THIS, SDL_Window * window);
 extern void WIN_UpdateClipCursor(SDL_Window *window);
 extern int WIN_SetWindowHitTest(SDL_Window *window, SDL_bool enabled);
+extern void WIN_GetDrawableSize(const SDL_Window *window, int *w, int *h);
+extern void WIN_ClientPointToSDL(const SDL_Window *window, int *w, int *h);
+extern void WIN_ClientPointFromSDL(const SDL_Window *window, int *w, int *h);
 extern void WIN_AcceptDragAndDrop(SDL_Window * window, SDL_bool accept);
 
 #endif /* SDL_windowswindow_h_ */

@@ -24,6 +24,7 @@
 
 #include "../../core/windows/SDL_windows.h"
 
+#include "SDL_log.h"
 #include "../SDL_sysvideo.h"
 #include "../SDL_pixels_c.h"
 #include "../../events/SDL_keyboard_c.h"
@@ -44,6 +45,8 @@
 #ifndef SWP_NOCOPYBITS
 #define SWP_NOCOPYBITS 0
 #endif
+
+/* #define HIGHDPI_DEBUG */
 
 /* Fake window to help with DirectInput events. */
 HWND SDL_HelperWindow = NULL;
@@ -111,29 +114,95 @@ GetWindowStyle(SDL_Window * window)
     return style;
 }
 
+/*
+in: client rect (in Windows coordinates)
+out: window rect, including frame (in Windows coordinates)
+*/
 static void
-WIN_AdjustWindowRectWithStyle(SDL_Window *window, DWORD style, BOOL menu, int *x, int *y, int *width, int *height, SDL_bool use_current)
+WIN_AdjustWindowRectWithStyleAndRect(SDL_Window *window, DWORD style, BOOL menu, int *x, int *y, int *width, int *height)
 {
+    const SDL_WindowData *data = (SDL_WindowData *)window->driverdata;
     RECT rect;
 
     rect.left = 0;
     rect.top = 0;
-    rect.right = (use_current ? window->w : window->windowed.w);
-    rect.bottom = (use_current ? window->h : window->windowed.h);
+    rect.right = *width;
+    rect.bottom = *height;
 
     /* borderless windows will have WM_NCCALCSIZE return 0 for the non-client area. When this happens, it looks like windows will send a resize message
        expanding the window client area to the previous window + chrome size, so shouldn't need to adjust the window size for the set styles.
      */
     if (!(window->flags & SDL_WINDOW_BORDERLESS))
-        AdjustWindowRectEx(&rect, style, menu, 0);
+        if (data->videodata->highdpi_enabled && data->videodata->AdjustWindowRectExForDpi) {
+            data->videodata->AdjustWindowRectExForDpi(&rect, style, menu, 0, data->scaling_xdpi);
+        } else {
+            AdjustWindowRectEx(&rect, style, menu, 0);
+        }
 
-    *x = (use_current ? window->x : window->windowed.x) + rect.left;
-    *y = (use_current ? window->y : window->windowed.y) + rect.top;
+    *x += rect.left;
+    *y += rect.top;
     *width = (rect.right - rect.left);
     *height = (rect.bottom - rect.top);
 }
 
+/*
+out: window rect, including frame (in Windows coordinates)
+*/
 static void
+WIN_AdjustWindowRectWithStyle(SDL_Window *window, DWORD style, BOOL menu, int *x, int *y, int *width, int *height, SDL_bool use_current)
+{
+    int x_win, y_win;
+    int w_win, h_win;
+
+    const int x_sdl = (use_current ? window->x : window->windowed.x);
+    const int y_sdl = (use_current ? window->y : window->windowed.y);
+    const int w_sdl = (use_current ? window->w : window->windowed.w);
+    const int h_sdl = (use_current ? window->h : window->windowed.h);
+
+    x_win = x_sdl;
+    y_win = y_sdl;
+    w_win = w_sdl;
+    h_win = h_sdl;
+    WIN_ScreenRectFromSDL(&x_win, &y_win, &w_win, &h_win);
+
+    /* NOTE: we don't use the width/height returned by WIN_ScreenRectFromSDL,
+       (which is making a guess of which monitor the rect is considered to be on)
+       but instead calculate width/height using WIN_ClientPointFromSDL 
+       which is using the DPI values that Windows considers the window to have.
+     */
+    w_win = w_sdl;
+    h_win = h_sdl;
+    WIN_ClientPointFromSDL(window, &w_win, &h_win);
+
+    WIN_AdjustWindowRectWithStyleAndRect(window, style, menu, &x_win, &y_win, &w_win, &h_win);
+
+    *x = x_win;
+    *y = y_win;
+    *width = w_win;
+    *height = h_win;
+}
+
+/*
+in: client rect (in Windows coordinates)
+out: window rect, including frame (in Windows coordinates)
+*/
+void
+WIN_AdjustWindowRectWithRect(SDL_Window *window, int *x, int *y, int *width, int *height)
+{
+    SDL_WindowData *data = (SDL_WindowData *)window->driverdata;
+    HWND hwnd = data->hwnd;
+    DWORD style;
+    BOOL menu;
+
+    style = GetWindowLong(hwnd, GWL_STYLE);
+    menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
+    WIN_AdjustWindowRectWithStyleAndRect(window, style, menu, x, y, width, height);
+}
+
+/*
+out: window rect, including frame (in Windows coordinates)
+*/
+void
 WIN_AdjustWindowRect(SDL_Window *window, int *x, int *y, int *width, int *height, SDL_bool use_current)
 {
     SDL_WindowData *data = (SDL_WindowData *)window->driverdata;
@@ -162,11 +231,54 @@ WIN_SetWindowPositionInternal(_THIS, SDL_Window * window, UINT flags)
         top = HWND_NOTOPMOST;
     }
 
+#ifdef HIGHDPI_DEBUG
+    SDL_Log("WIN_SetWindowPositionInternal: SDL window rect: (%d, %d) (%d x %d)", window->x, window->y, window->w, window->h);
+#endif
+
     WIN_AdjustWindowRect(window, &x, &y, &w, &h, SDL_TRUE);    
+
+#ifdef HIGHDPI_DEBUG
+    SDL_Log("WIN_SetWindowPositionInternal: calling SetWindowPos (%d, %d) (%d x %d)", x, y, w, h);
+#endif
 
     data->expected_resize = SDL_TRUE;
     SetWindowPos(hwnd, top, x, y, w, h, flags);
     data->expected_resize = SDL_FALSE;
+}
+
+static void
+WIN_GetDPIForHWND(const SDL_VideoData *videodata, HWND hwnd, int *xdpi, int *ydpi)
+{
+    *xdpi = 96;
+    *ydpi = 96;
+
+    /* highdpi not requested? */
+    if (!videodata->highdpi_enabled)
+        return;
+
+    /* Window 10+ */
+    if (videodata->GetDpiForWindow) {
+        *xdpi = videodata->GetDpiForWindow(hwnd);
+        *ydpi = *xdpi;
+        return;
+    }
+
+    /* window 8.1+ */
+    if (videodata->GetDpiForMonitor) {
+        HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if (monitor) {
+            UINT xdpi_uint, ydpi_uint;
+            if (S_OK == videodata->GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &xdpi_uint, &ydpi_uint)) {
+                *xdpi = xdpi_uint;
+                *ydpi = ydpi_uint;
+            }
+        }
+        return;
+    }
+
+    /* Windows Vista-8.0 */
+    *xdpi = videodata->system_xdpi;
+    *ydpi = videodata->system_ydpi;
 }
 
 static int
@@ -190,6 +302,7 @@ SetupWindowData(_THIS, SDL_Window * window, HWND hwnd, HWND parent, SDL_bool cre
     data->last_pointer_update = (LPARAM)-1;
     data->videodata = videodata;
     data->initializing = SDL_TRUE;
+    WIN_GetDPIForHWND(videodata, hwnd, &data->scaling_xdpi, &data->scaling_ydpi);
 
     window->driverdata = data;
 
@@ -217,12 +330,17 @@ SetupWindowData(_THIS, SDL_Window * window, HWND hwnd, HWND parent, SDL_bool cre
     }
 #endif
 
+    /* Move window to the correct monitor and size it */
+    WIN_SetWindowPositionInternal(_this, window, SWP_NOCOPYBITS | SWP_NOACTIVATE);
+
     /* Fill in the SDL window with the window data */
     {
         RECT rect;
         if (GetClientRect(hwnd, &rect)) {
             int w = rect.right;
             int h = rect.bottom;
+
+            WIN_ClientPointToSDL(window, &w, &h);
             if ((window->windowed.w && window->windowed.w != w) || (window->windowed.h && window->windowed.h != h)) {
                 /* We tried to create a window larger than the desktop and Windows didn't allow it.  Override! */
                 int x, y;
@@ -236,12 +354,18 @@ SetupWindowData(_THIS, SDL_Window * window, HWND hwnd, HWND parent, SDL_bool cre
         }
     }
     {
+        RECT rect;
         POINT point;
         point.x = 0;
         point.y = 0;
-        if (ClientToScreen(hwnd, &point)) {
-            window->x = point.x;
-            window->y = point.y;
+        if (ClientToScreen(hwnd, &point) && GetClientRect(hwnd, &rect)) {
+            int x = point.x;
+            int y = point.y;
+            int w = rect.right;
+            int h = rect.bottom;
+            WIN_ScreenRectToSDL(&x, &y, &w, &h);
+            window->x = x;
+            window->y = y;
         }
     }
     {
@@ -309,8 +433,6 @@ WIN_CreateWindow(_THIS, SDL_Window * window)
 {
     HWND hwnd, parent = NULL;
     DWORD style = STYLE_BASIC;
-    int x, y;
-    int w, h;
 
     if (window->flags & SDL_WINDOW_SKIP_TASKBAR) {
         parent = CreateWindow(SDL_Appname, TEXT(""), STYLE_BASIC, 0, 0, 32, 32, NULL, NULL, SDL_Instance, NULL);
@@ -318,11 +440,15 @@ WIN_CreateWindow(_THIS, SDL_Window * window)
 
     style |= GetWindowStyle(window);
 
-    /* Figure out what the window area will be */
-    WIN_AdjustWindowRectWithStyle(window, style, FALSE, &x, &y, &w, &h, SDL_FALSE);
-
+    /* For high-DPI support, it's easier / more robust** to create the window
+       with a width/height of 0, then in SetupWindowData we will check the
+       DPI and adjust the position and size to match window->x,y,w,h.
+       
+       **The reason is, we can't know window DPI for sure until after the
+       window is created.
+    */
     hwnd =
-        CreateWindow(SDL_Appname, TEXT(""), style, x, y, w, h, parent, NULL,
+        CreateWindow(SDL_Appname, TEXT(""), style, CW_USEDEFAULT, 0, 0, 0, parent, NULL,
                      SDL_Instance, NULL);
     if (!hwnd) {
         return WIN_SetError("Couldn't create window");
@@ -656,13 +782,30 @@ WIN_RestoreWindow(_THIS, SDL_Window * window)
 void
 WIN_SetWindowFullscreen(_THIS, SDL_Window * window, SDL_VideoDisplay * display, SDL_bool fullscreen)
 {
+    SDL_DisplayData *displaydata = (SDL_DisplayData *) display->driverdata;
     SDL_WindowData *data = (SDL_WindowData *) window->driverdata;
+    SDL_VideoData *videodata = data->videodata;
     HWND hwnd = data->hwnd;
-    SDL_Rect bounds;
+    MONITORINFO minfo;
     DWORD style;
     HWND top;
     int x, y;
     int w, h;
+
+    /* BUG: windows don't receive a WM_DPICHANGED message after a ChangeDisplaySettingsEx,
+       so we must manually update the cached DPI (see WIN_SetDisplayMode). */
+#ifdef HIGHDPI_DEBUG
+    {
+        int xdpi, ydpi;
+        WIN_GetDPIForHWND(videodata, hwnd, &xdpi, &ydpi);
+        SDL_Log("WIN_SetWindowFullscreen: dpi: %d, stale cached dpi: %d", xdpi, data->scaling_xdpi);
+    }
+#endif
+    WIN_GetDPIForHWND(videodata, hwnd, &data->scaling_xdpi, &data->scaling_ydpi);
+
+    /* clear the window size, to cause us to send a SDL_WINDOWEVENT_RESIZED event in WM_WINDOWPOSCHANGED */
+    data->window->w = 0;
+    data->window->h = 0;
 
     if (SDL_ShouldAllowTopmost() && ((window->flags & (SDL_WINDOW_FULLSCREEN|SDL_WINDOW_INPUT_FOCUS)) == (SDL_WINDOW_FULLSCREEN|SDL_WINDOW_INPUT_FOCUS) || window->flags & SDL_WINDOW_ALWAYS_ON_TOP)) {
         top = HWND_TOPMOST;
@@ -674,13 +817,20 @@ WIN_SetWindowFullscreen(_THIS, SDL_Window * window, SDL_VideoDisplay * display, 
     style &= ~STYLE_MASK;
     style |= GetWindowStyle(window);
 
-    WIN_GetDisplayBounds(_this, display, &bounds);
+    /* Use GetMonitorInfo instead of WIN_GetDisplayBounds because we want the
+       monitor bounds in Windows coordinates (pixels) rather than SDL coordinates (points). */
+    SDL_zero(minfo);
+    minfo.cbSize = sizeof(MONITORINFO);
+    if (!GetMonitorInfo(displaydata->MonitorHandle, &minfo)) {
+        SDL_SetError("GetMonitorInfo failed");
+        return;
+    }
 
     if (fullscreen) {
-        x = bounds.x;
-        y = bounds.y;
-        w = bounds.w;
-        h = bounds.h;
+        x = minfo.rcMonitor.left;
+        y = minfo.rcMonitor.top;
+        w = minfo.rcMonitor.right - minfo.rcMonitor.left;
+        h = minfo.rcMonitor.bottom - minfo.rcMonitor.top;
 
         /* Unset the maximized flag.  This fixes
            https://bugzilla.libsdl.org/show_bug.cgi?id=3215
@@ -1075,6 +1225,48 @@ WIN_SetWindowOpacity(_THIS, SDL_Window * window, float opacity)
     }
 
     return 0;
+}
+
+void
+WIN_GetDrawableSize(const SDL_Window *window, int *w, int *h)
+{
+    const SDL_WindowData *data = ((SDL_WindowData *)window->driverdata);
+    HWND hwnd = data->hwnd;
+    RECT rect;
+
+    if (GetClientRect(hwnd, &rect)) {
+        *w = rect.right;
+        *h = rect.bottom;
+    } else {
+        *w = 0;
+        *h = 0;
+    }
+}
+
+void
+WIN_ClientPointToSDL(const SDL_Window *window, int *x, int *y)
+{
+    const SDL_WindowData *data = ((SDL_WindowData *)window->driverdata);
+    const SDL_VideoData *videodata = data->videodata;
+
+    if (!videodata->highdpi_enabled)
+        return;
+
+    *x = MulDiv(*x, 96, data->scaling_xdpi);
+    *y = MulDiv(*y, 96, data->scaling_ydpi);
+}
+
+void
+WIN_ClientPointFromSDL(const SDL_Window *window, int *x, int *y)
+{
+    const SDL_WindowData *data = ((SDL_WindowData *)window->driverdata);
+    const SDL_VideoData *videodata = data->videodata;
+
+    if (!videodata->highdpi_enabled)
+        return;
+    
+    *x = MulDiv(*x, data->scaling_xdpi, 96);
+    *y = MulDiv(*y, data->scaling_ydpi, 96);
 }
 
 void
