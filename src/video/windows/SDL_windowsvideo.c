@@ -131,6 +131,7 @@ WIN_CreateDevice(int devindex)
         data->AdjustWindowRectExForDpi = (BOOL (WINAPI *)(LPRECT, DWORD, BOOL, DWORD, UINT)) SDL_LoadFunction(data->userDLL, "AdjustWindowRectExForDpi");
         data->GetDpiForWindow = (UINT (WINAPI *)(HWND)) SDL_LoadFunction(data->userDLL, "GetDpiForWindow");
         data->AreDpiAwarenessContextsEqual = (BOOL (WINAPI *)(DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT)) SDL_LoadFunction(data->userDLL, "AreDpiAwarenessContextsEqual");
+        data->IsValidDpiAwarenessContext = (BOOL (WINAPI *)(DPI_AWARENESS_CONTEXT)) SDL_LoadFunction(data->userDLL, "IsValidDpiAwarenessContext");
     } else {
         SDL_ClearError();
     }

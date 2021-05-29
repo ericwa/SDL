@@ -176,6 +176,7 @@ typedef struct SDL_VideoData
     BOOL (WINAPI *AdjustWindowRectExForDpi)( LPRECT, DWORD, BOOL, DWORD, UINT );
     UINT (WINAPI *GetDpiForWindow)( HWND );
     BOOL (WINAPI *AreDpiAwarenessContextsEqual)(DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT);
+    BOOL (WINAPI *IsValidDpiAwarenessContext)(DPI_AWARENESS_CONTEXT);
 
     void* shcoreDLL;
     HRESULT (WINAPI *GetDpiForMonitor)( HMONITOR         hmonitor,
