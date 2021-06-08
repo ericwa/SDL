@@ -2348,13 +2348,6 @@ SDLTest_CommonDrawWindowInfo(SDL_Renderer * renderer, SDL_Window * window, int *
         textY += lineHeight;
     }
 
-    if (0 == SDL_GetDisplayUsableBounds(windowDisplayIndex, &rect)) {
-        SDL_snprintf(text, sizeof(text), "SDL_GetDisplayUsableBounds: %d,%d, %dx%d",
-                     rect.x, rect.y, rect.w, rect.h);
-        SDLTest_DrawString(renderer, 0, textY, text);
-        textY += lineHeight;
-    }
-
     if (0 == SDL_GetCurrentDisplayMode(windowDisplayIndex, &mode)) {
         SDL_snprintf(text, sizeof(text), "SDL_GetCurrentDisplayMode: %dx%d@%d",
                      mode.w, mode.h, mode.refresh_rate);
