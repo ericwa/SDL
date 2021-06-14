@@ -27,6 +27,7 @@
 
 #define COBJMACROS
 #include "../../core/windows/SDL_windows.h"
+#include "../../video/windows/SDL_windowswindow.h"
 #include "SDL_hints.h"
 #include "SDL_loadso.h"
 #include "SDL_syswm.h"
