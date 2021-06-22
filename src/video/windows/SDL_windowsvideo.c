@@ -286,19 +286,6 @@ WIN_VideoInit(_THIS)
         WIN_SetDPIAware(_this);
     }
 
-    /* Cache LOGPIXELSX/LOGPIXELSY. */
-    {
-        HDC hdc = GetDC(NULL);
-        if (hdc) {
-            data->system_xdpi = GetDeviceCaps(hdc, LOGPIXELSX);
-            data->system_ydpi = GetDeviceCaps(hdc, LOGPIXELSY);
-            ReleaseDC(NULL, hdc);
-        } else {
-            data->system_xdpi = 96;
-            data->system_ydpi = 96;
-        }
-    }
-
     if (WIN_InitModes(_this) < 0) {
         return -1;
     }
