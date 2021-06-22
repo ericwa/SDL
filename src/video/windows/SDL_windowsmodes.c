@@ -311,6 +311,29 @@ WIN_InitModes(_THIS)
 }
 
 int
+WIN_GetDisplayBounds(_THIS, SDL_VideoDisplay * display, SDL_Rect * rect)
+{
+    const SDL_DisplayData *data = (const SDL_DisplayData *)display->driverdata;
+    MONITORINFO minfo;
+    BOOL rc;
+
+    SDL_zero(minfo);
+    minfo.cbSize = sizeof(MONITORINFO);
+    rc = GetMonitorInfo(data->MonitorHandle, &minfo);
+
+    if (!rc) {
+        return SDL_SetError("Couldn't find monitor data");
+    }
+
+    rect->x = minfo.rcMonitor.left;
+    rect->y = minfo.rcMonitor.top;
+    rect->w = minfo.rcMonitor.right - minfo.rcMonitor.left;
+    rect->h = minfo.rcMonitor.bottom - minfo.rcMonitor.top;
+
+    return 0;
+}
+
+int
 WIN_GetDisplayDPI(_THIS, SDL_VideoDisplay * display, float * ddpi_out, float * hdpi_out, float * vdpi_out)
 {
     const SDL_DisplayData *displaydata = (SDL_DisplayData *)display->driverdata;
@@ -369,8 +392,8 @@ WIN_GetDisplayDPI(_THIS, SDL_VideoDisplay * display, float * ddpi_out, float * h
     return ddpi != 0.0f ? 0 : SDL_SetError("Couldn't get DPI");
 }
 
-static int
-WIN_GetDisplayBoundsInternal(_THIS, SDL_VideoDisplay * display, SDL_Rect * rect, SDL_bool usable)
+int
+WIN_GetDisplayUsableBounds(_THIS, SDL_VideoDisplay * display, SDL_Rect * rect)
 {
     const SDL_DisplayData *data = (const SDL_DisplayData *)display->driverdata;
     const SDL_VideoData *vid_data = (const SDL_VideoData *)_this->driverdata;
@@ -388,32 +411,12 @@ WIN_GetDisplayBoundsInternal(_THIS, SDL_VideoDisplay * display, SDL_Rect * rect,
         return SDL_SetError("Couldn't find monitor data");
     }
 
-    rect_win = usable ? &minfo.rcWork : &minfo.rcMonitor;
-
-    x = rect_win->left;
-    y = rect_win->top;
-    w = rect_win->right - rect_win->left;
-    h = rect_win->bottom - rect_win->top;
-    WIN_ScreenRectToSDL(&x, &y, &w, &h);
-
-    rect->x = x;
-    rect->y = y;
-    rect->w = w;
-    rect->h = h;
+    rect->x = minfo.rcWork.left;
+    rect->y = minfo.rcWork.top;
+    rect->w = minfo.rcWork.right - minfo.rcWork.left;
+    rect->h = minfo.rcWork.bottom - minfo.rcWork.top;
 
     return 0;
-}
-
-int
-WIN_GetDisplayBounds(_THIS, SDL_VideoDisplay * display, SDL_Rect * rect)
-{
-    return WIN_GetDisplayBoundsInternal(_this, display, rect, SDL_FALSE);
-}
-
-int
-WIN_GetDisplayUsableBounds(_THIS, SDL_VideoDisplay * display, SDL_Rect * rect)
-{
-    return WIN_GetDisplayBoundsInternal(_this, display, rect, SDL_TRUE);
 }
 
 static int
