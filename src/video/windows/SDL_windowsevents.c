@@ -1045,7 +1045,6 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int w, h;
             int min_w, min_h;
             int max_w, max_h;
-            int unused_x, unused_y;
             BOOL constrain_max_size;
 
             if (SDL_IsShapedWindow(data->window)) {
@@ -1085,10 +1084,29 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 constrain_max_size = FALSE;
             }
 
-            /* Expand w/h to include the frame. */
-            unused_x = 0;
-            unused_y = 0;
-            WIN_AdjustWindowRectWithRect(data->window, &unused_x, &unused_y, &w, &h);
+            if (!(SDL_GetWindowFlags(data->window) & SDL_WINDOW_BORDERLESS)) {
+                LONG style = GetWindowLong(hwnd, GWL_STYLE);
+                /* DJM - according to the docs for GetMenu(), the
+                   return value is undefined if hwnd is a child window.
+                   Apparently it's too difficult for MS to check
+                   inside their function, so I have to do it here.
+                 */
+                BOOL menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
+                size.top = 0;
+                size.left = 0;
+                size.bottom = h;
+                size.right = w;
+
+                /* TODO: Possibly we should use AdjustWindowRectExForDpi even if
+                   SDL DPI awareness wasn't requested */
+                if (data->videodata->highdpi_enabled && data->videodata->AdjustWindowRectExForDpi) {
+                    data->videodata->AdjustWindowRectExForDpi(&size, style, menu, 0, data->scaling_dpi);
+                } else {
+                    AdjustWindowRectEx(&size, style, menu, 0);
+                }
+                w = size.right - size.left;
+                h = size.bottom - size.top;
+            }
 
             /* Fix our size to the current size */
             info = (MINMAXINFO *) lParam;
