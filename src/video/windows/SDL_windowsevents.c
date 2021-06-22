@@ -657,24 +657,6 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         data = (SDL_WindowData *) GetProp(hwnd, TEXT("SDL_WindowData"));
     }
     if (!data) {
-        /* Request that windows scale the non-client area when moving between monitors.
-           This is only for Windows 10 Anniversary Update.
-           In the Windows 10 Creators Update, this is the default behaviour with a per-monitor V2 context.
-        */
-        switch (msg) {
-            case WM_NCCREATE:
-                {
-                    SDL_VideoDevice *device = SDL_GetVideoDevice();
-                    if (device && device->driverdata) {
-                        SDL_VideoData *data = SDL_static_cast(SDL_VideoData *, device->driverdata);
-                        if (data->highdpi_enabled && data->EnableNonClientDpiScaling) {
-                            data->EnableNonClientDpiScaling(hwnd);
-                        }
-                    }
-                }
-            break;
-        }
-
         return CallWindowProc(DefWindowProc, hwnd, msg, wParam, lParam);
     }
 
