@@ -396,12 +396,8 @@ int
 WIN_GetDisplayUsableBounds(_THIS, SDL_VideoDisplay * display, SDL_Rect * rect)
 {
     const SDL_DisplayData *data = (const SDL_DisplayData *)display->driverdata;
-    const SDL_VideoData *vid_data = (const SDL_VideoData *)_this->driverdata;
     MONITORINFO minfo;
-    const RECT *rect_win;
     BOOL rc;
-    int x, y;
-    int w, h;
 
     SDL_zero(minfo);
     minfo.cbSize = sizeof(MONITORINFO);
