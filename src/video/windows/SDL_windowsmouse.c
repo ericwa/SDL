@@ -332,7 +332,7 @@ WIN_GetGlobalMouseState(int *x, int *y)
     GetCursorPos(&pt);
     *x = (int) pt.x;
     *y = (int) pt.y;
-    WIN_ScreenRectToSDL(x, y, NULL, NULL);
+    WIN_ScreenPointToSDL(x, y);
 
     retval |= GetAsyncKeyState(!swapButtons ? VK_LBUTTON : VK_RBUTTON) & 0x8000 ? SDL_BUTTON_LMASK : 0;
     retval |= GetAsyncKeyState(!swapButtons ? VK_RBUTTON : VK_LBUTTON) & 0x8000 ? SDL_BUTTON_RMASK : 0;

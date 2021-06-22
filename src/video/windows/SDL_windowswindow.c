@@ -345,9 +345,7 @@ SetupWindowData(_THIS, SDL_Window * window, HWND hwnd, HWND parent, SDL_bool cre
         if (ClientToScreen(hwnd, &point) && GetClientRect(hwnd, &rect)) {
             int x = point.x;
             int y = point.y;
-            int w = rect.right;
-            int h = rect.bottom;
-            WIN_ScreenRectToSDL(&x, &y, &w, &h);
+            WIN_ScreenPointToSDL(&x, &y);
             window->x = x;
             window->y = y;
         }

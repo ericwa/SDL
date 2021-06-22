@@ -1167,15 +1167,13 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             x = rect.left;
             y = rect.top;
-            w = rect.right - rect.left;
-            h = rect.bottom - rect.top;
-            WIN_ScreenRectToSDL(&x, &y, &w, &h);
+            WIN_ScreenPointToSDL(&x, &y);
 
             SDL_SendWindowEvent(data->window, SDL_WINDOWEVENT_MOVED, x, y);
 
             /* NOTE: important to convert w/h from SDL (points) to Windows (pixels) using 
                WIN_ClientPointToSDL, which uses the window's actual
-               DPI value, rather than WIN_ScreenRectToSDL which guesses. */
+               DPI value. */
             w = rect.right - rect.left;
             h = rect.bottom - rect.top;
             WIN_ClientPointToSDL(data->window, &w, &h);
