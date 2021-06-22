@@ -525,13 +525,17 @@ void WIN_ScreenRectToSDL(int *x, int *y, int *w, int *h)
     
     inputrect.left = *x;
     inputrect.top = *y;
-    inputrect.right = *x + *w;
-    inputrect.bottom = *y + *h;
+    inputrect.right = *x + (w ? *w : 0);
+    inputrect.bottom = *y + (h ? *h : 0);
     monitor = MonitorFromRect(&inputrect, MONITOR_DEFAULTTONEAREST);
 
     if (WIN_GetMonitorDPIAndRects(videodata, monitor, &xdpi, &ydpi, &monitorrect_sdl, &monitorrect_win) == 0) {
-        *w = MulDiv(*w, 96, xdpi);
-        *h = MulDiv(*h, 96, ydpi);
+        if (w) {
+            *w = MulDiv(*w, 96, xdpi);
+        }
+        if (h) {
+            *h = MulDiv(*h, 96, ydpi);
+        }
 
         *x = monitorrect_win.left + MulDiv(*x - monitorrect_win.left, 96, xdpi);
         *y = monitorrect_win.top + MulDiv(*y - monitorrect_win.top, 96, ydpi);
