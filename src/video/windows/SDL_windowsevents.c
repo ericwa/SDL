@@ -1490,13 +1490,12 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 #ifdef HIGHDPI_DEBUG
             SDL_Log("WM_DPICHANGED: %d to %d\tsuggested rect: (%d, %d), (%dx%d)\n", 
-                data->scaling_xdpi, newDPI,
+                data->scaling_dpi, newDPI,
                 suggestedRect->left, suggestedRect->top, suggestedRect->right - suggestedRect->left, suggestedRect->bottom - suggestedRect->top);
 #endif
 
             /* update the cached DPI value for this window */
-            data->scaling_xdpi = newDPI;
-            data->scaling_ydpi = newDPI;
+            data->scaling_dpi = newDPI;
 
             if (data->videodata->AreDpiAwarenessContextsEqual
                 && data->videodata->GetThreadDpiAwarenessContext

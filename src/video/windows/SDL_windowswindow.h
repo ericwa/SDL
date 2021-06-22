@@ -58,11 +58,7 @@ typedef struct
 #if SDL_VIDEO_OPENGL_EGL  
     EGLSurface egl_surface;
 #endif
-    /* NOTE: differing xdpi and ydpi is legacy-only, but we still support it.
-       On Windows 8.1+ it shouldn't happen (GetDpiForMonitor docs promise xdpi and ydpi are equal)
-       and on Windows 10+ it won't (GetDpiForWindow has a single return value).*/
-    int scaling_xdpi;
-    int scaling_ydpi;
+    int scaling_dpi;
 } SDL_WindowData;
 
 extern void WIN_AdjustWindowRectWithRect(SDL_Window *window, int *x, int *y, int *width, int *height);

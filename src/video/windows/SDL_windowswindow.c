@@ -135,7 +135,7 @@ WIN_AdjustWindowRectWithStyleAndRect(SDL_Window *window, DWORD style, BOOL menu,
      */
     if (!(window->flags & SDL_WINDOW_BORDERLESS))
         if (data->videodata->highdpi_enabled && data->videodata->AdjustWindowRectExForDpi) {
-            data->videodata->AdjustWindowRectExForDpi(&rect, style, menu, 0, data->scaling_xdpi);
+            data->videodata->AdjustWindowRectExForDpi(&rect, style, menu, 0, data->scaling_dpi);
         } else {
             AdjustWindowRectEx(&rect, style, menu, 0);
         }
@@ -247,38 +247,21 @@ WIN_SetWindowPositionInternal(_THIS, SDL_Window * window, UINT flags)
     data->expected_resize = SDL_FALSE;
 }
 
-static void
-WIN_GetDPIForHWND(const SDL_VideoData *videodata, HWND hwnd, int *xdpi, int *ydpi)
+static int
+WIN_GetDPIForHWND(const SDL_VideoData *videodata, HWND hwnd)
 {
-    *xdpi = 96;
-    *ydpi = 96;
-
     /* highdpi not requested? */
     if (!videodata->highdpi_enabled)
-        return;
+        return 96;
 
     /* Window 10+ */
     if (videodata->GetDpiForWindow) {
-        *xdpi = videodata->GetDpiForWindow(hwnd);
-        *ydpi = *xdpi;
-        return;
+        return videodata->GetDpiForWindow(hwnd);
     }
 
-    /* window 8.1+ */
-    if (videodata->GetDpiForMonitor) {
-        HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-        if (monitor) {
-            UINT xdpi_uint, ydpi_uint;
-            if (S_OK == videodata->GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &xdpi_uint, &ydpi_uint)) {
-                *xdpi = xdpi_uint;
-                *ydpi = ydpi_uint;
-            }
-        }
-        return;
-    }
-
-    /* Windows Vista-8.0 */
+    /* Windows Vista-8.1 */
     /* no SDL2 highdpi support */
+    return 96;
 }
 
 static int
@@ -303,7 +286,7 @@ SetupWindowData(_THIS, SDL_Window * window, HWND hwnd, HWND parent, SDL_bool cre
     data->last_pointer_update = (LPARAM)-1;
     data->videodata = videodata;
     data->initializing = SDL_TRUE;
-    WIN_GetDPIForHWND(videodata, hwnd, &data->scaling_xdpi, &data->scaling_ydpi);
+    data->scaling_dpi = WIN_GetDPIForHWND(videodata, hwnd);
 
     window->driverdata = data;
 
@@ -819,13 +802,9 @@ WIN_SetWindowFullscreen(_THIS, SDL_Window * window, SDL_VideoDisplay * display, 
     /* BUG: windows don't receive a WM_DPICHANGED message after a ChangeDisplaySettingsEx,
        so we must manually update the cached DPI (see WIN_SetDisplayMode). */
 #ifdef HIGHDPI_DEBUG
-    {
-        int xdpi, ydpi;
-        WIN_GetDPIForHWND(videodata, hwnd, &xdpi, &ydpi);
-        SDL_Log("WIN_SetWindowFullscreen: dpi: %d, stale cached dpi: %d", xdpi, data->scaling_xdpi);
-    }
+    SDL_Log("WIN_SetWindowFullscreen: dpi: %d, stale cached dpi: %d", WIN_GetDPIForHWND(videodata, hwnd), data->scaling_dpi);
 #endif
-    WIN_GetDPIForHWND(videodata, hwnd, &data->scaling_xdpi, &data->scaling_ydpi);
+    data->scaling_dpi = WIN_GetDPIForHWND(videodata, hwnd);
 
     /* clear the window size, to cause us to send a SDL_WINDOWEVENT_RESIZED event in WM_WINDOWPOSCHANGED */
     data->window->w = 0;
@@ -1317,8 +1296,8 @@ WIN_ClientPointToSDL(const SDL_Window *window, int *x, int *y)
     if (!videodata->highdpi_enabled)
         return;
 
-    *x = MulDiv(*x, 96, data->scaling_xdpi);
-    *y = MulDiv(*y, 96, data->scaling_ydpi);
+    *x = MulDiv(*x, 96, data->scaling_dpi);
+    *y = MulDiv(*y, 96, data->scaling_dpi);
 }
 
 void
@@ -1330,8 +1309,8 @@ WIN_ClientPointFromSDL(const SDL_Window *window, int *x, int *y)
     if (!videodata->highdpi_enabled)
         return;
     
-    *x = MulDiv(*x, data->scaling_xdpi, 96);
-    *y = MulDiv(*y, data->scaling_ydpi, 96);
+    *x = MulDiv(*x, data->scaling_dpi, 96);
+    *y = MulDiv(*y, data->scaling_dpi, 96);
 }
 
 void
