@@ -257,23 +257,31 @@ WIN_SetDPIAware(_THIS)
 
         /*
         NOTE: The above calls will fail if the DPI awareness was already set outside of SDL.
-        It doesn't matter if they fail, we will just use whatever DPI awareness level was set externally.
         */
-        data->highdpi_enabled = SDL_TRUE;
     } else if (data->SetProcessDpiAwareness) {
         /* Windows 8.1-Windows 10 */
         HRESULT result = data->SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
-
-        data->highdpi_enabled = SDL_TRUE;
     } else if (data->SetProcessDPIAware) {
         /* Vista-Windows 8.0 */
         BOOL success = data->SetProcessDPIAware();
+    }
+}
 
+static void
+WIN_SetAllowHighDPI(_THIS)
+{
+    SDL_VideoData *data = SDL_static_cast(SDL_VideoData *, _this->driverdata);
+
+    // Declare DPI aware (may have been done in external code or a manifest, as well)
+    WIN_SetDPIAware(_this);
+
+    // Check for PMv2 context
+    if (data->AreDpiAwarenessContextsEqual
+        && data->GetThreadDpiAwarenessContext
+        && data->AreDpiAwarenessContextsEqual(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, data->GetThreadDpiAwarenessContext()))
+    {
         data->highdpi_enabled = SDL_TRUE;
     }
-
-    /* NOTE: we won't set data->highdpi_enabled below Vista.
-    In theory we could still check LOGPIXELSX/Y on XP. */
 }
 
 int
@@ -282,6 +290,10 @@ WIN_VideoInit(_THIS)
     SDL_VideoData *data = (SDL_VideoData *) _this->driverdata;
 
     /* Set the process DPI awareness */
+    if (SDL_GetHintBoolean(SDL_HINT_WINDOWS_DECLARE_DPI_AWARE, SDL_FALSE)) {
+        WIN_SetDPIAware(_this);
+    }
+    /* Check if SDL2 highdpi virtualization was requested */
     if (SDL_GetHintBoolean(SDL_HINT_VIDEO_ALLOW_HIGHDPI, SDL_FALSE)) {
         WIN_SetDPIAware(_this);
     }
