@@ -1459,11 +1459,18 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             SDL_Log("WM_GETDPISCALEDSIZE: current DPI: %d potential DPI: %d. input size: (%dx%d)", currentDPI, potentialDPI, sizeInOut->cx, sizeInOut->cy);
 #endif
 
-            WIN_AdjustWindowRect(data->window, &x, &y, &w, &h, SDL_TRUE);
+            /* get the frame size in pixels at currentDPI */
+            {
+                DWORD style = GetWindowLong(hwnd, GWL_STYLE);
+                BOOL menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
+                RECT rect = {0};
 
-            /* get the frame size */
-            frame_w = w - MulDiv(data->window->w, currentDPI, 96);
-            frame_h = h - MulDiv(data->window->h, currentDPI, 96);
+                if (!(data->window->flags & SDL_WINDOW_BORDERLESS))
+                    data->videodata->AdjustWindowRectExForDpi(&rect, style, menu, 0, currentDPI);
+
+                frame_w = -rect.left + rect.right;
+                frame_h = -rect.top + rect.bottom;
+            }
 
             query_client_w_win = sizeInOut->cx - frame_w;
             query_client_h_win = sizeInOut->cy - frame_h;
