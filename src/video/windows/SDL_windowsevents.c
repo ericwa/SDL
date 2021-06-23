@@ -1451,7 +1451,6 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             const int currentDPI = (int)data->videodata->GetDpiForWindow(hwnd);
             SIZE *sizeInOut = (SIZE *)lParam;
 
-            int x, y, w, h;
             int frame_w, frame_h;
             int query_client_w_win, query_client_h_win;
 
@@ -1509,7 +1508,7 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (data->videodata->highdpi_enabled) {
             const int newDPI = HIWORD(wParam);
             RECT* const suggestedRect = (RECT*)lParam;
-            int x, y, w, h;
+            int w, h;
 
 #ifdef HIGHDPI_DEBUG
             SDL_Log("WM_DPICHANGED: %d to %d\tsuggested rect: (%d, %d), (%dx%d)\n", 
