@@ -490,7 +490,7 @@ WIN_GetMonitorDPIAndRects(const SDL_VideoData *videodata, HMONITOR monitor, UINT
 }
 
 /* Convert an SDL to a Windows screen rect. */
-void WIN_ScreenRectFromSDL(int *x, int *y, int *w, int *h)
+void WIN_ScreenRectFromSDL(int *x, int *y, int *w, int *h, int *dpi)
 {
     const SDL_VideoDevice *videodevice = SDL_GetVideoDevice();
     const SDL_VideoData *videodata;
@@ -535,6 +535,14 @@ void WIN_ScreenRectFromSDL(int *x, int *y, int *w, int *h)
             *x = monitorrect_win.right - 1;
         if (*y >= monitorrect_win.bottom)
             *y = monitorrect_win.bottom - 1;
+
+        if (dpi) {
+            *dpi = xdpi;
+        }
+    } else {
+        if (dpi) {
+            *dpi = 96;
+        }
     }
 }
 

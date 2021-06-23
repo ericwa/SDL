@@ -61,8 +61,6 @@ typedef struct
     int scaling_dpi;
 } SDL_WindowData;
 
-extern void WIN_AdjustWindowRectWithRect(SDL_Window *window, int *x, int *y, int *width, int *height);
-extern void WIN_AdjustWindowRect(SDL_Window *window, int *x, int *y, int *width, int *height, SDL_bool use_current);
 extern int WIN_CreateWindow(_THIS, SDL_Window * window);
 extern int WIN_CreateWindowFrom(_THIS, SDL_Window * window, const void *data);
 extern void WIN_SetWindowTitle(_THIS, SDL_Window * window);

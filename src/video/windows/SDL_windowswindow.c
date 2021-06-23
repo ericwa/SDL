@@ -116,32 +116,47 @@ GetWindowStyle(SDL_Window * window)
 }
 
 /*
-in: client rect (in Windows coordinates)
 out: window rect, including frame (in Windows coordinates)
+
+Can be called before HWND is created.
 */
 static void
-WIN_AdjustWindowRectWithStyleAndRect(SDL_Window *window, DWORD style, BOOL menu, int *x, int *y, int *width, int *height)
+WIN_AdjustWindowRectWithStyle(SDL_Window *window, DWORD style, BOOL menu, int *x, int *y, int *width, int *height, SDL_bool use_current)
 {
-    const SDL_WindowData *data = (SDL_WindowData *)window->driverdata;
+    const SDL_VideoDevice *videodevice = SDL_GetVideoDevice();
+    const SDL_VideoData *videodata;
     RECT rect;
+    int dpi;
 
-    rect.left = 0;
-    rect.top = 0;
-    rect.right = *width;
-    rect.bottom = *height;
+    if (!videodevice || !videodevice->driverdata)
+        return;
+
+    videodata = (SDL_VideoData *)videodevice->driverdata;
+
+    *x = (use_current ? window->x : window->windowed.x);
+    *y = (use_current ? window->y : window->windowed.y);
+    *width = (use_current ? window->w : window->windowed.w);
+    *height = (use_current ? window->h : window->windowed.h);
+
+    WIN_ScreenRectFromSDL(x, y, width, height, &dpi);
+
+    rect.left = *x;
+    rect.top = *y;
+    rect.right = *x + *width;
+    rect.bottom = *y + *height;
 
     /* borderless windows will have WM_NCCALCSIZE return 0 for the non-client area. When this happens, it looks like windows will send a resize message
        expanding the window client area to the previous window + chrome size, so shouldn't need to adjust the window size for the set styles.
      */
     if (!(window->flags & SDL_WINDOW_BORDERLESS))
-        if (data->videodata->highdpi_enabled && data->videodata->AdjustWindowRectExForDpi) {
-            data->videodata->AdjustWindowRectExForDpi(&rect, style, menu, 0, data->scaling_dpi);
+        if (videodata->highdpi_enabled && videodata->AdjustWindowRectExForDpi) {
+            videodata->AdjustWindowRectExForDpi(&rect, style, menu, 0, dpi);
         } else {
             AdjustWindowRectEx(&rect, style, menu, 0);
         }
 
-    *x += rect.left;
-    *y += rect.top;
+    *x = rect.left;
+    *y = rect.top;
     *width = (rect.right - rect.left);
     *height = (rect.bottom - rect.top);
 }
@@ -150,60 +165,6 @@ WIN_AdjustWindowRectWithStyleAndRect(SDL_Window *window, DWORD style, BOOL menu,
 out: window rect, including frame (in Windows coordinates)
 */
 static void
-WIN_AdjustWindowRectWithStyle(SDL_Window *window, DWORD style, BOOL menu, int *x, int *y, int *width, int *height, SDL_bool use_current)
-{
-    int x_win, y_win;
-    int w_win, h_win;
-
-    const int x_sdl = (use_current ? window->x : window->windowed.x);
-    const int y_sdl = (use_current ? window->y : window->windowed.y);
-    const int w_sdl = (use_current ? window->w : window->windowed.w);
-    const int h_sdl = (use_current ? window->h : window->windowed.h);
-
-    x_win = x_sdl;
-    y_win = y_sdl;
-    w_win = w_sdl;
-    h_win = h_sdl;
-    WIN_ScreenRectFromSDL(&x_win, &y_win, &w_win, &h_win);
-
-    /* NOTE: we don't use the width/height returned by WIN_ScreenRectFromSDL,
-       (which is making a guess of which monitor the rect is considered to be on)
-       but instead calculate width/height using WIN_ClientPointFromSDL 
-       which is using the DPI values that Windows considers the window to have.
-     */
-    w_win = w_sdl;
-    h_win = h_sdl;
-    WIN_ClientPointFromSDL(window, &w_win, &h_win);
-
-    WIN_AdjustWindowRectWithStyleAndRect(window, style, menu, &x_win, &y_win, &w_win, &h_win);
-
-    *x = x_win;
-    *y = y_win;
-    *width = w_win;
-    *height = h_win;
-}
-
-/*
-in: client rect (in Windows coordinates)
-out: window rect, including frame (in Windows coordinates)
-*/
-void
-WIN_AdjustWindowRectWithRect(SDL_Window *window, int *x, int *y, int *width, int *height)
-{
-    SDL_WindowData *data = (SDL_WindowData *)window->driverdata;
-    HWND hwnd = data->hwnd;
-    DWORD style;
-    BOOL menu;
-
-    style = GetWindowLong(hwnd, GWL_STYLE);
-    menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
-    WIN_AdjustWindowRectWithStyleAndRect(window, style, menu, x, y, width, height);
-}
-
-/*
-out: window rect, including frame (in Windows coordinates)
-*/
-void
 WIN_AdjustWindowRect(SDL_Window *window, int *x, int *y, int *width, int *height, SDL_bool use_current)
 {
     SDL_WindowData *data = (SDL_WindowData *)window->driverdata;
@@ -314,9 +275,6 @@ SetupWindowData(_THIS, SDL_Window * window, HWND hwnd, HWND parent, SDL_bool cre
     }
 #endif
 
-    /* Move window to the correct monitor and size it */
-    WIN_SetWindowPositionInternal(_this, window, SWP_NOCOPYBITS | SWP_NOACTIVATE);
-
     /* Fill in the SDL window with the window data */
     {
         RECT rect;
@@ -408,6 +366,8 @@ WIN_CreateWindow(_THIS, SDL_Window * window)
 {
     HWND hwnd, parent = NULL;
     DWORD style = STYLE_BASIC;
+    int x, y;
+    int w, h;
 
     if (window->flags & SDL_WINDOW_SKIP_TASKBAR) {
         parent = CreateWindow(SDL_Appname, TEXT(""), STYLE_BASIC, 0, 0, 32, 32, NULL, NULL, SDL_Instance, NULL);
@@ -415,15 +375,11 @@ WIN_CreateWindow(_THIS, SDL_Window * window)
 
     style |= GetWindowStyle(window);
 
-    /* For high-DPI support, it's easier / more robust** to create the window
-       with a width/height of 0, then in SetupWindowData we will check the
-       DPI and adjust the position and size to match window->x,y,w,h.
-       
-       **The reason is, we can't know window DPI for sure until after the
-       window is created.
-    */
+    /* Figure out what the window area will be */
+    WIN_AdjustWindowRectWithStyle(window, style, FALSE, &x, &y, &w, &h, SDL_FALSE);
+
     hwnd =
-        CreateWindow(SDL_Appname, TEXT(""), style, CW_USEDEFAULT, 0, 0, 0, parent, NULL,
+        CreateWindow(SDL_Appname, TEXT(""), style, x, y, w, h, parent, NULL,
                      SDL_Instance, NULL);
     if (!hwnd) {
         return WIN_SetError("Couldn't create window");
