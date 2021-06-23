@@ -295,7 +295,7 @@ WIN_VideoInit(_THIS)
     }
     /* Check if SDL2 highdpi virtualization was requested */
     if (SDL_GetHintBoolean(SDL_HINT_VIDEO_ALLOW_HIGHDPI, SDL_FALSE)) {
-        WIN_SetDPIAware(_this);
+        WIN_SetAllowHighDPI(_this);
     }
 
     if (WIN_InitModes(_this) < 0) {
