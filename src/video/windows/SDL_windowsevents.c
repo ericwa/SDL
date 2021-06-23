@@ -1513,25 +1513,12 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             /* update the cached DPI value for this window */
             data->scaling_dpi = newDPI;
 
-            if (data->videodata->AreDpiAwarenessContextsEqual
-                && data->videodata->GetThreadDpiAwarenessContext
-                && data->videodata->AreDpiAwarenessContextsEqual(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, data->videodata->GetThreadDpiAwarenessContext()))
-            {
-                /*
-                DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 means that
-                WM_GETDPISCALEDSIZE will have been called, so we can use suggestedRect.
-                */
-                w = suggestedRect->right - suggestedRect->left;
-                h = suggestedRect->bottom - suggestedRect->top;
-            } else {
-                /*
-                The OS does not support WM_GETDPISCALEDSIZE, so we can't use suggestedRect.
-
-                (suggestedRect is calculated by default to preserves the apparent size of the window rect,
-                whereas we want to preserve the apparent size of the client rect.)
-                */
-                WIN_AdjustWindowRect(data->window, &x, &y, &w, &h, SDL_TRUE);
-            }
+            /*
+            DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 means that
+            WM_GETDPISCALEDSIZE will have been called, so we can use suggestedRect.
+            */
+            w = suggestedRect->right - suggestedRect->left;
+            h = suggestedRect->bottom - suggestedRect->top;
             
 #ifdef HIGHDPI_DEBUG
             SDL_Log("WM_DPICHANGED: current SDL window size: (%dx%d)\tcalling SetWindowPos: (%d, %d), (%dx%d)\n",
