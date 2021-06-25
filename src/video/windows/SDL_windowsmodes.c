@@ -498,6 +498,7 @@ void WIN_ScreenPointFromSDL(int *x, int *y, int *dpiOut)
     int displayIndex;
     SDL_Rect bounds;
     float ddpi, hdpi, vdpi;
+    int x_sdl, y_sdl;
 
     if (!videodevice || !videodevice->driverdata)
         return;
@@ -522,8 +523,15 @@ void WIN_ScreenPointFromSDL(int *x, int *y, int *dpiOut)
     /* ddpi/hdpi/vdpi are all identical */
     *dpiOut = ddpi;
 
-    *x = bounds.x + MulDiv(*x - bounds.x, *dpiOut, 96);
-    *y = bounds.y + MulDiv(*y - bounds.y, *dpiOut, 96);
+    x_sdl = *x;
+    y_sdl = *y;
+    *x = bounds.x + MulDiv(x_sdl - bounds.x, (int)ddpi, 96);
+    *y = bounds.y + MulDiv(y_sdl - bounds.y, (int)ddpi, 96);
+
+#ifdef HIGHDPI_DEBUG
+    SDL_Log("WIN_ScreenPointFromSDL: (%d, %d) points -> (%d x %d) pixels, using %d DPI monitor",
+        x_sdl, y_sdl, *x, *y, (int)ddpi);
+#endif
 }
 
 /* Converts a Windows screen point to an SDL one. */
@@ -536,6 +544,7 @@ void WIN_ScreenPointToSDL(int *x, int *y)
     int i, displayIndex;
     SDL_Rect bounds;
     float ddpi, hdpi, vdpi;
+    int x_pixels, y_pixels;
 
     if (!videodevice || !videodevice->driverdata) {
         return;
@@ -568,8 +577,15 @@ void WIN_ScreenPointToSDL(int *x, int *y)
         return;
     }
 
-    *x = bounds.x + MulDiv(*x - bounds.x, 96, (int)ddpi);
-    *y = bounds.y + MulDiv(*y - bounds.y, 96, (int)ddpi);
+    x_pixels = *x;
+    y_pixels = *y;
+    *x = bounds.x + MulDiv(x_pixels - bounds.x, 96, (int)ddpi);
+    *y = bounds.y + MulDiv(y_pixels - bounds.y, 96, (int)ddpi);
+
+#ifdef HIGHDPI_DEBUG
+    SDL_Log("WIN_ScreenPointToSDL: (%d, %d) pixels -> (%d x %d) points, using %d DPI monitor",
+        x_pixels, y_pixels, *x, *y, (int)ddpi);
+#endif
 }
 
 void
