@@ -448,56 +448,56 @@ WIN_GetDisplayUsableBounds(_THIS, SDL_VideoDisplay * display, SDL_Rect * rect)
     return 0;
 }
 
+/* Copied from SDL_GetWindowDisplayIndex */
 static int
-WIN_GetMonitorDPIAndRects(const SDL_VideoData *videodata, HMONITOR monitor, UINT *xdpi, UINT *ydpi, RECT *monitorrect_sdl, RECT *monitorrect_win)
+SDL_GetPointDisplayIndex(int x, int y)
 {
-    HRESULT result;
-    MONITORINFO moninfo = { 0 };
-    UINT unused;
-    int mon_width, mon_height;
+    int displayIndex;
+    int i, dist;
+    int closest = -1;
+    int closest_dist = 0x7FFFFFFF;
+    SDL_Point delta;
+    SDL_Rect rect;
+    SDL_VideoDevice *_this = SDL_GetVideoDevice();
+    SDL_Point center;
+    center.x = x;
+    center.y = y;
 
-    /* Check for Windows < 8.1*/
-    if (!videodata->GetDpiForMonitor) {
-        return SDL_SetError("GetDpiForMonitor failed");
-    } else {
-        result = videodata->GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, xdpi, &unused);
-        *ydpi = *xdpi;
-        if (result != S_OK) {
-            /* Shouldn't happen? */
-            return SDL_SetError("GetDpiForMonitor failed");
+    for (i = 0; i < _this->num_displays; ++i) {
+        SDL_GetDisplayBounds(i, &rect);
+        if (SDL_EnclosePoints(&center, 1, &rect, NULL)) {
+            return i;
+        }
+
+        delta.x = center.x - (rect.x + rect.w / 2);
+        delta.y = center.y - (rect.y + rect.h / 2);
+        dist = (delta.x*delta.x + delta.y*delta.y);
+        if (dist < closest_dist) {
+            closest = i;
+            closest_dist = dist;
         }
     }
-
-    moninfo.cbSize = sizeof(MONITORINFO);
-    if (!GetMonitorInfo(monitor, &moninfo)) {
-        /* Shouldn't happen? */
-        return SDL_SetError("GetMonitorInfo failed");
+    if (closest < 0) {
+        SDL_SetError("Couldn't find any displays");
     }
-
-    *monitorrect_win = moninfo.rcMonitor;
-    *monitorrect_sdl = moninfo.rcMonitor;
-
-    /* fix up the right/bottom of monitorrect_sdl */
-    mon_width = moninfo.rcMonitor.right - moninfo.rcMonitor.left;
-    mon_height = moninfo.rcMonitor.bottom - moninfo.rcMonitor.top;
-    mon_width = MulDiv(mon_width, 96, *xdpi);
-    mon_height = MulDiv(mon_height, 96, *ydpi);
-
-    monitorrect_sdl->right = monitorrect_sdl->left + mon_width;
-    monitorrect_sdl->bottom = monitorrect_sdl->top + mon_height;
-
-    return 0;
+    return closest;
 }
 
-/* Convert an SDL to a Windows screen rect. */
-void WIN_ScreenRectFromSDL(int *x, int *y, int *w, int *h, int *dpi)
+/**
+* Current bug: position a window slightly off the left edge of the 100% main monitor,
+* touching the 125% monitor to the left.
+* 
+* Then use Shift+Left/Right. The window drifts vertically.
+* 
+* Solution: get rid of WIN_ScreenRectFromSDL.
+*/
+void WIN_ScreenPointFromSDL(int *x, int *y, int *dpiOut)
 {
     const SDL_VideoDevice *videodevice = SDL_GetVideoDevice();
     const SDL_VideoData *videodata;
-    RECT inputrect;
-    RECT monitorrect_sdl, monitorrect_win;
-    UINT xdpi, ydpi;
-    HMONITOR monitor;
+    int displayIndex;
+    SDL_Rect bounds;
+    float ddpi, hdpi, vdpi;
 
     if (!videodevice || !videodevice->driverdata)
         return;
@@ -506,44 +506,24 @@ void WIN_ScreenRectFromSDL(int *x, int *y, int *w, int *h, int *dpi)
     if (!videodata->highdpi_enabled)
         return;
 
-    /*
-    The trick here is passing SDL coordinates to MonitorFromRect, which expects Windows 
-    coordinates (pixels). This is wrong, but there is no real alternative, and due to
-    the way we derive the SDL coordinate system, it works OK:
+    displayIndex = SDL_GetPointDisplayIndex(*x, *y);
 
-    - top-left corner of monitors in SDL coordinates are identical to the top-left corner in Windows coordinates.
-    - the widths/heights of monitors (and windows) in SDL coords are in scaled points,
-      which are equal or less than the corresponding sizes in pixels (because we only support scale factors >=100%)
-    - becuase of the above two points, a rect (in SDL coordinates) that is fully inside 
-      a monitor's bounds (in SDL coordinates) will also be fully inside that monitor's bounds in Windows coordinates.
-    */
-    inputrect.left = *x;
-    inputrect.top = *y;
-    inputrect.right = *x + *w;
-    inputrect.bottom = *y + *h;
-    monitor = MonitorFromRect(&inputrect, MONITOR_DEFAULTTONEAREST);
-
-    if (WIN_GetMonitorDPIAndRects(videodata, monitor, &xdpi, &ydpi, &monitorrect_sdl, &monitorrect_win) == 0) {
-        *w = MulDiv(*w, xdpi, 96);
-        *h = MulDiv(*h, ydpi, 96);
-
-        *x = monitorrect_sdl.left + MulDiv(*x - monitorrect_sdl.left, xdpi, 96);
-        *y = monitorrect_sdl.top + MulDiv(*y - monitorrect_sdl.top, ydpi, 96);
-
-        /* ensure the result is not past the right/bottom of the monitor rect */
-        if (*x >= monitorrect_win.right)
-            *x = monitorrect_win.right - 1;
-        if (*y >= monitorrect_win.bottom)
-            *y = monitorrect_win.bottom - 1;
-
-        if (dpi) {
-            *dpi = xdpi;
-        }
-    } else {
-        if (dpi) {
-            *dpi = 96;
-        }
+    if (displayIndex < 0) {
+        *dpiOut = 96;
+        return;
     }
+
+    if (SDL_GetDisplayBounds(displayIndex, &bounds) < 0
+        || SDL_GetDisplayDPI(displayIndex, &ddpi, &hdpi, &vdpi) < 0) {
+        *dpiOut = 96;
+        return;
+    }
+
+    /* ddpi/hdpi/vdpi are all identical */
+    *dpiOut = ddpi;
+
+    *x = bounds.x + MulDiv(*x - bounds.x, *dpiOut, 96);
+    *y = bounds.y + MulDiv(*y - bounds.y, *dpiOut, 96);
 }
 
 /* Converts a Windows screen point to an SDL one. */
@@ -551,28 +531,45 @@ void WIN_ScreenPointToSDL(int *x, int *y)
 {
     const SDL_VideoDevice *videodevice = SDL_GetVideoDevice();
     const SDL_VideoData *videodata;
-    RECT inputrect;
-    RECT monitorrect_sdl, monitorrect_win;
-    UINT xdpi, ydpi;
+    POINT point;
     HMONITOR monitor;
+    int i, displayIndex;
+    SDL_Rect bounds;
+    float ddpi, hdpi, vdpi;
 
-    if (!videodevice || !videodevice->driverdata)
+    if (!videodevice || !videodevice->driverdata) {
         return;
+    }
 
     videodata = (SDL_VideoData *)videodevice->driverdata;
-    if (!videodata->highdpi_enabled)
+    if (!videodata->highdpi_enabled) {
         return;
-    
-    inputrect.left = *x;
-    inputrect.top = *y;
-    inputrect.right = *x;
-    inputrect.bottom = *y;
-    monitor = MonitorFromRect(&inputrect, MONITOR_DEFAULTTONEAREST);
-
-    if (WIN_GetMonitorDPIAndRects(videodata, monitor, &xdpi, &ydpi, &monitorrect_sdl, &monitorrect_win) == 0) {
-        *x = monitorrect_win.left + MulDiv(*x - monitorrect_win.left, 96, xdpi);
-        *y = monitorrect_win.top + MulDiv(*y - monitorrect_win.top, 96, ydpi);
     }
+    
+    point.x = *x;
+    point.y = *y;
+    monitor = MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST);
+
+    /* Search for the corresponding SDL monitor */
+    displayIndex = -1;
+    for (i = 0; i < videodevice->num_displays; ++i) {
+        SDL_DisplayData *driverdata = (SDL_DisplayData *)videodevice->displays[i].driverdata;
+        if (driverdata->MonitorHandle == monitor) {
+            displayIndex = i;
+        }
+    }
+    if (displayIndex == -1) {
+        return;
+    }
+
+    /* Get SDL display properties */
+    if (SDL_GetDisplayBounds(displayIndex, &bounds) < 0
+        || SDL_GetDisplayDPI(displayIndex, &ddpi, &hdpi, &vdpi) < 0) {
+        return;
+    }
+
+    *x = bounds.x + MulDiv(*x - bounds.x, 96, (int)ddpi);
+    *y = bounds.y + MulDiv(*y - bounds.y, 96, (int)ddpi);
 }
 
 void

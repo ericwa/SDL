@@ -138,7 +138,10 @@ WIN_AdjustWindowRectWithStyle(SDL_Window *window, DWORD style, BOOL menu, int *x
     *width = (use_current ? window->w : window->windowed.w);
     *height = (use_current ? window->h : window->windowed.h);
 
-    WIN_ScreenRectFromSDL(x, y, width, height, &dpi);
+    /* Convert from SDL coordinate to pixels */
+    WIN_ScreenPointFromSDL(x, y, &dpi);
+    *width = MulDiv(*width, dpi, 96);
+    *height = MulDiv(*height, dpi, 96);
 
     rect.left = *x;
     rect.top = *y;
