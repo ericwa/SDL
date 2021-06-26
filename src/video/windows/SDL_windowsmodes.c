@@ -449,7 +449,7 @@ WIN_GetDisplayUsableBounds(_THIS, SDL_VideoDisplay * display, SDL_Rect * rect)
 }
 
 static void
-SDL_GetClosetPointOnRect(const SDL_Rect *rect, int *x, int *y)
+SDL_GetClosestPointOnRect(const SDL_Rect *rect, int *x, int *y)
 {
     const int right = rect->x + rect->w;
     const int bottom = rect->y + rect->h;
@@ -493,7 +493,7 @@ SDL_GetPointDisplayIndex(int x, int y)
         /* Snap x, y to the display rect */
         closest_x_on_disp = point.x;
         closest_y_on_disp = point.y;
-        SDL_GetClosetPointOnRect(&rect, &closest_x_on_disp, &closest_y_on_disp);
+        SDL_GetClosestPointOnRect(&rect, &closest_x_on_disp, &closest_y_on_disp);
 
         delta.x = point.x - closest_x_on_disp;
         delta.y = point.y - closest_y_on_disp;
