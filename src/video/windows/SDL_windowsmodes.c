@@ -490,7 +490,11 @@ SDL_GetPointDisplayIndex(int x, int y)
             return i;
         }
 
+        /* Snap x, y to the display rect */
+        closest_x_on_disp = point.x;
+        closest_y_on_disp = point.y;
         SDL_GetClosetPointOnRect(&rect, &closest_x_on_disp, &closest_y_on_disp);
+
         delta.x = point.x - closest_x_on_disp;
         delta.y = point.y - closest_y_on_disp;
         dist = (delta.x*delta.x + delta.y*delta.y);
