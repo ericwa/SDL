@@ -448,29 +448,51 @@ WIN_GetDisplayUsableBounds(_THIS, SDL_VideoDisplay * display, SDL_Rect * rect)
     return 0;
 }
 
-/* Copied from SDL_GetWindowDisplayIndex */
+static void
+SDL_GetClosetPointOnRect(const SDL_Rect *rect, int *x, int *y)
+{
+    const int right = rect->x + rect->w;
+    const int bottom = rect->y + rect->h;
+
+    if (*x < rect->x) {
+        *x = rect->x;
+    } else if (*x >= right) {
+        *x = right - 1;
+    }
+
+    if (*y < rect->y) {
+        *y = rect->y;
+    } else if (*y >= bottom) {
+        *y = bottom - 1;
+    }
+}
+
+/* Adapted from SDL_GetWindowDisplayIndex (different test though) */
 static int
 SDL_GetPointDisplayIndex(int x, int y)
 {
-    int displayIndex;
     int i, dist;
     int closest = -1;
     int closest_dist = 0x7FFFFFFF;
+    int closest_x_on_disp;
+    int closest_y_on_disp;
     SDL_Point delta;
     SDL_Rect rect;
     SDL_VideoDevice *_this = SDL_GetVideoDevice();
-    SDL_Point center;
-    center.x = x;
-    center.y = y;
+    SDL_Point point;
+    point.x = x;
+    point.y = y;
 
     for (i = 0; i < _this->num_displays; ++i) {
+        /* Check for an exact match */
         SDL_GetDisplayBounds(i, &rect);
-        if (SDL_EnclosePoints(&center, 1, &rect, NULL)) {
+        if (SDL_EnclosePoints(&point, 1, &rect, NULL)) {
             return i;
         }
 
-        delta.x = center.x - (rect.x + rect.w / 2);
-        delta.y = center.y - (rect.y + rect.h / 2);
+        SDL_GetClosetPointOnRect(&rect, &closest_x_on_disp, &closest_y_on_disp);
+        delta.x = point.x - closest_x_on_disp;
+        delta.y = point.y - closest_y_on_disp;
         dist = (delta.x*delta.x + delta.y*delta.y);
         if (dist < closest_dist) {
             closest = i;
@@ -521,7 +543,7 @@ void WIN_ScreenPointFromSDL(int *x, int *y, int *dpiOut)
     }
 
     /* ddpi/hdpi/vdpi are all identical */
-    *dpiOut = ddpi;
+    *dpiOut = (int)ddpi;
 
     x_sdl = *x;
     y_sdl = *y;
