@@ -123,23 +123,30 @@ Can be called before HWND is created.
 static void
 WIN_AdjustWindowRectWithStyle(SDL_Window *window, DWORD style, BOOL menu, int *x, int *y, int *width, int *height, SDL_bool use_current)
 {
-    const SDL_VideoDevice *videodevice = SDL_GetVideoDevice();
-    const SDL_VideoData *videodata;
+    SDL_WindowData *data = (SDL_WindowData *)window->driverdata;
+    SDL_VideoData* videodata = SDL_GetVideoDevice() ? SDL_GetVideoDevice()->driverdata : NULL;
     RECT rect;
     int dpi;
 
-    if (!videodevice || !videodevice->driverdata)
-        return;
-
-    videodata = (SDL_VideoData *)videodevice->driverdata;
-
+    /* Window client rect, in SDL screen coordinates */
     *x = (use_current ? window->x : window->windowed.x);
     *y = (use_current ? window->y : window->windowed.y);
     *width = (use_current ? window->w : window->windowed.w);
     *height = (use_current ? window->h : window->windowed.h);
 
-    /* Convert from SDL coordinate to pixels */
+    /* Convert position from SDL coordinates to pixels */
     WIN_ScreenPointFromSDL(x, y, &dpi);
+
+    /* If the window exists, use our cached DPI for:
+       - converting the client area size from points to pixels
+       - the AdjustWindowRectExForDpi call below
+       
+       data is NULL only when first creating the window
+    */
+    if (data) {
+        dpi = data->scaling_dpi;
+    }
+
     *width = MulDiv(*width, dpi, 96);
     *height = MulDiv(*height, dpi, 96);
 
@@ -153,7 +160,7 @@ WIN_AdjustWindowRectWithStyle(SDL_Window *window, DWORD style, BOOL menu, int *x
      */
     if (!(window->flags & SDL_WINDOW_BORDERLESS))
         if (videodata->highdpi_enabled && videodata->AdjustWindowRectExForDpi) {
-            videodata->AdjustWindowRectExForDpi(&rect, style, menu, 0, dpi);
+            videodata->AdjustWindowRectExForDpi(&rect, style, menu, 0, (UINT)dpi);
         } else {
             AdjustWindowRectEx(&rect, style, menu, 0);
         }

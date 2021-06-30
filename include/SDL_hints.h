@@ -1141,13 +1141,6 @@ extern "C" {
  */
 #define SDL_HINT_VIDEO_ALLOW_HIGHDPI "SDL_VIDEO_ALLOW_HIGHDPI"
 
- /**
- *  \brief Declare DPI awareness, without enabling SDL's DPI-scaled points coordinate system
- * 
- * See SDL_HINT_VIDEO_ALLOW_HIGHDPI
- */
-#define SDL_HINT_WINDOWS_DECLARE_DPI_AWARE "SDL_HINT_WINDOWS_DECLARE_DPI_AWARE"
-
 /**
  *  \brief  A variable controlling whether the Direct3D device is initialized for thread-safe operations.
  *

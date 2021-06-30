@@ -1097,8 +1097,6 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 size.bottom = h;
                 size.right = w;
 
-                /* TODO: Possibly we should use AdjustWindowRectExForDpi even if
-                   SDL DPI awareness wasn't requested */
                 if (data->videodata->highdpi_enabled && data->videodata->AdjustWindowRectExForDpi) {
                     data->videodata->AdjustWindowRectExForDpi(&size, style, menu, 0, data->scaling_dpi);
                 } else {
@@ -1447,38 +1445,38 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             scaling.
             */
             
-            const int potentialDPI = (int)wParam;
-            const int currentDPI = (int)data->videodata->GetDpiForWindow(hwnd);
+            const int nextDPI = (int)wParam;
+            const int prevDPI = (int)data->videodata->GetDpiForWindow(hwnd);
             SIZE *sizeInOut = (SIZE *)lParam;
 
             int frame_w, frame_h;
             int query_client_w_win, query_client_h_win;
 
 #ifdef HIGHDPI_DEBUG
-            SDL_Log("WM_GETDPISCALEDSIZE: current DPI: %d potential DPI: %d. input size: (%dx%d)", currentDPI, potentialDPI, sizeInOut->cx, sizeInOut->cy);
+            SDL_Log("WM_GETDPISCALEDSIZE: current DPI: %d potential DPI: %d. input size: (%dx%d)", prevDPI, nextDPI, sizeInOut->cx, sizeInOut->cy);
 #endif
 
-            /* get the frame size in pixels at currentDPI */
+            /* subtract the window frame size that would have been used at prevDPI */
             {
                 DWORD style = GetWindowLong(hwnd, GWL_STYLE);
                 BOOL menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
                 RECT rect = {0};
 
                 if (!(data->window->flags & SDL_WINDOW_BORDERLESS))
-                    data->videodata->AdjustWindowRectExForDpi(&rect, style, menu, 0, currentDPI);
+                    data->videodata->AdjustWindowRectExForDpi(&rect, style, menu, 0, prevDPI);
 
                 frame_w = -rect.left + rect.right;
                 frame_h = -rect.top + rect.bottom;
+
+                query_client_w_win = sizeInOut->cx - frame_w;
+                query_client_h_win = sizeInOut->cy - frame_h;
             }
 
-            query_client_w_win = sizeInOut->cx - frame_w;
-            query_client_h_win = sizeInOut->cy - frame_h;
-
             /* convert to new dpi */
-            query_client_w_win = MulDiv(query_client_w_win, potentialDPI, currentDPI);
-            query_client_h_win = MulDiv(query_client_h_win, potentialDPI, currentDPI);
+            query_client_w_win = MulDiv(query_client_w_win, nextDPI, prevDPI);
+            query_client_h_win = MulDiv(query_client_h_win, nextDPI, prevDPI);
 
-            /* re-add the window frame in the new DPI */
+            /* add the window frame size that would be used at nextDPI */
             {
                 DWORD style = GetWindowLong(hwnd, GWL_STYLE);
                 BOOL menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
@@ -1490,7 +1488,7 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 rect.bottom = query_client_h_win;
 
                 if (!(data->window->flags & SDL_WINDOW_BORDERLESS))
-                    data->videodata->AdjustWindowRectExForDpi(&rect, style, menu, 0, potentialDPI);
+                    data->videodata->AdjustWindowRectExForDpi(&rect, style, menu, 0, nextDPI);
 
                 /* This is supposed to control the suggested rect param of WM_DPICHANGED */
                 sizeInOut->cx = rect.right - rect.left;
