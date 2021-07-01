@@ -249,9 +249,9 @@ WIN_SetAllowHighDPI(_THIS)
     SDL_VideoData *data = SDL_static_cast(SDL_VideoData *, _this->driverdata);
 
     // Declare DPI aware (may have been done in external code or a manifest, as well)
-    if (data->SetProcessDpiAwarenessContext) {
+    if (data->SetThreadDpiAwarenessContext) {
         /* Windows 10 Creators Update+ */
-        data->SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        data->SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     }
 
     // Check for PMv2 context
