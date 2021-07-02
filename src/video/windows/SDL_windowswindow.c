@@ -762,12 +762,7 @@ WIN_SetWindowFullscreen(_THIS, SDL_Window * window, SDL_VideoDisplay * display, 
     int x, y;
     int w, h;
 
-    /* BUG: windows don't receive a WM_DPICHANGED message after a ChangeDisplaySettingsEx,
-       so we must manually update the cached DPI (see WIN_SetDisplayMode). */
-#ifdef HIGHDPI_DEBUG
-    SDL_Log("WIN_SetWindowFullscreen: dpi: %d, stale cached dpi: %d", WIN_GetDPIForHWND(videodata, hwnd), data->scaling_dpi);
-#endif
-    data->scaling_dpi = WIN_GetDPIForHWND(videodata, hwnd);
+    SDL_Log("WIN_SetWindowFullscreen %d", (int)fullscreen);
 
     /* clear the window size, to cause us to send a SDL_WINDOWEVENT_RESIZED event in WM_WINDOWPOSCHANGED */
     data->window->w = 0;
@@ -805,6 +800,8 @@ WIN_SetWindowFullscreen(_THIS, SDL_Window * window, SDL_VideoDisplay * display, 
             data->windowed_mode_was_maximized = SDL_TRUE;
             style &= ~WS_MAXIMIZE;
         }
+
+        data->scaling_dpi = 96;
     } else {
         BOOL menu;
 
@@ -819,6 +816,8 @@ WIN_SetWindowFullscreen(_THIS, SDL_Window * window, SDL_VideoDisplay * display, 
             data->windowed_mode_was_maximized = SDL_FALSE;
         }
 
+        data->scaling_dpi = WIN_GetDPIForHWND(videodata, data->hwnd);
+
         menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
         WIN_AdjustWindowRectWithStyle(window, style, menu, &x, &y, &w, &h, SDL_FALSE);
     }
@@ -826,6 +825,8 @@ WIN_SetWindowFullscreen(_THIS, SDL_Window * window, SDL_VideoDisplay * display, 
     data->expected_resize = SDL_TRUE;
     SetWindowPos(hwnd, top, x, y, w, h, SWP_NOCOPYBITS | SWP_NOACTIVATE);
     data->expected_resize = SDL_FALSE;
+
+    SDL_Log("WIN_SetWindowFullscreen %d done. Set window to %d,%d, %dx%d", (int)fullscreen, x, y, w, h);
 }
 
 int
