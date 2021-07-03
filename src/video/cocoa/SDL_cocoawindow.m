@@ -175,10 +175,10 @@
     /* Code addon to update the mouse location */
     NSPoint point = [sender draggingLocation];
     SDL_Mouse *mouse = SDL_GetMouse();
-    int x = (int)point.x;
-    int y = (int)(sdlwindow->h - point.y);
+    float x = point.x;
+    float y = sdlwindow->h - point.y;
     if (x >= 0 && x < sdlwindow->w && y >= 0 && y < sdlwindow->h) {
-        SDL_SendMouseMotion(sdlwindow, mouse->mouseID, 0, x, y);
+        SDL_SendMouseMotionFloat(sdlwindow, mouse->mouseID, 0, x, y);
     }
     /* Code addon to update the mouse location */
 
@@ -823,14 +823,14 @@ Cocoa_UpdateClipCursor(SDL_Window * window)
     /* If we just gained focus we need the updated mouse position */
     if (!mouse->relative_mode) {
         NSPoint point;
-        int x, y;
+        float x, y;
 
         point = [_data->nswindow mouseLocationOutsideOfEventStream];
-        x = (int)point.x;
-        y = (int)(window->h - point.y);
+        x = point.x;
+        y = window->h - point.y;
 
         if (x >= 0 && x < window->w && y >= 0 && y < window->h) {
-            SDL_SendMouseMotion(window, mouse->mouseID, 0, x, y);
+            SDL_SendMouseMotionFloat(window, mouse->mouseID, 0, x, y);
         }
     }
 
@@ -1294,7 +1294,7 @@ Cocoa_SendMouseButtonClicks(SDL_Mouse * mouse, NSEvent *theEvent, SDL_Window * w
     const SDL_MouseID mouseID = mouse->mouseID;
     SDL_Window *window = _data->window;
     NSPoint point;
-    int x, y;
+    float x, y;
 
     if ([self processHitTest:theEvent]) {
         SDL_SendWindowEvent(window, SDL_WINDOWEVENT_HIT_TEST, 0, 0);
@@ -1306,8 +1306,8 @@ Cocoa_SendMouseButtonClicks(SDL_Mouse * mouse, NSEvent *theEvent, SDL_Window * w
     }
 
     point = [theEvent locationInWindow];
-    x = (int)point.x;
-    y = (int)(window->h - point.y);
+    x = point.x;
+    y = window->h - point.y;
 
     if (NSAppKitVersionNumber >= NSAppKitVersionNumber10_13_2) {
         /* Mouse grab is taken care of by the confinement rect */
@@ -1321,7 +1321,7 @@ Cocoa_SendMouseButtonClicks(SDL_Mouse * mouse, NSEvent *theEvent, SDL_Window * w
         }
     }
 
-    SDL_SendMouseMotion(window, mouseID, 0, x, y);
+    SDL_SendMouseMotionFloat(window, mouseID, 0, x, y);
 }
 
 - (void)mouseDragged:(NSEvent *)theEvent

@@ -45,7 +45,7 @@ static SDL_Mouse SDL_mouse;
 static SDL_bool track_mouse_down = SDL_FALSE;
 
 static int
-SDL_PrivateSendMouseMotion(SDL_Window * window, SDL_MouseID mouseID, int relative, int x, int y);
+SDL_PrivateSendMouseMotion(SDL_Window * window, SDL_MouseID mouseID, int relative, float x, float y);
 
 static void SDLCALL
 SDL_MouseDoubleClickTimeChanged(void *userdata, const char *name, const char *oldValue, const char *hint)
@@ -287,7 +287,7 @@ SDL_UpdateMouseFocus(SDL_Window * window, int x, int y, Uint32 buttonstate, SDL_
 }
 
 int
-SDL_SendMouseMotion(SDL_Window * window, SDL_MouseID mouseID, int relative, int x, int y)
+SDL_SendMouseMotionFloat(SDL_Window * window, SDL_MouseID mouseID, int relative, float x, float y)
 {
     if (window && !relative) {
         SDL_Mouse *mouse = SDL_GetMouse();
@@ -299,35 +299,26 @@ SDL_SendMouseMotion(SDL_Window * window, SDL_MouseID mouseID, int relative, int 
     return SDL_PrivateSendMouseMotion(window, mouseID, relative, x, y);
 }
 
-static int
-GetScaledMouseDelta(float scale, int value, float *accum)
+int
+SDL_SendMouseMotion(SDL_Window * window, SDL_MouseID mouseID, int relative, int x, int y)
 {
-    if (scale != 1.0f) {
-        *accum += scale * value;
-        if (*accum >= 0.0f) {
-            value = (int)SDL_floor(*accum);
-        } else {
-            value = (int)SDL_ceil(*accum);
-        }
-        *accum -= value;
-    }
-    return value;
+    return SDL_SendMouseMotionFloat(window, mouseID, relative, x, y);
 }
 
 static int
-SDL_PrivateSendMouseMotion(SDL_Window * window, SDL_MouseID mouseID, int relative, int x, int y)
+SDL_PrivateSendMouseMotion(SDL_Window * window, SDL_MouseID mouseID, int relative, float x, float y)
 {
     SDL_Mouse *mouse = SDL_GetMouse();
     int posted;
-    int xrel;
-    int yrel;
+    float xrel;
+    float yrel;
 
     /* SDL_HINT_MOUSE_TOUCH_EVENTS: controlling whether mouse events should generate synthetic touch events */
     if (mouse->mouse_touch_events) {
         if (mouseID != SDL_TOUCH_MOUSEID && !relative && track_mouse_down) {
             if (window) {
-                float fx = (float)x / (float)window->w;
-                float fy = (float)y / (float)window->h;
+                float fx = x / (float)window->w;
+                float fy = y / (float)window->h;
                 SDL_SendTouchMotion(SDL_MOUSE_TOUCHID, 0, window, fx, fy, 1.0f);
             }
         }
@@ -361,11 +352,11 @@ SDL_PrivateSendMouseMotion(SDL_Window * window, SDL_MouseID mouseID, int relativ
 
     if (relative) {
         if (mouse->relative_mode) {
-            x = GetScaledMouseDelta(mouse->relative_speed_scale, x, &mouse->scale_accum_x);
-            y = GetScaledMouseDelta(mouse->relative_speed_scale, y, &mouse->scale_accum_y);
+            x *= mouse->relative_speed_scale;
+            y *= mouse->relative_speed_scale;
         } else {
-            x = GetScaledMouseDelta(mouse->normal_speed_scale, x, &mouse->scale_accum_x);
-            y = GetScaledMouseDelta(mouse->normal_speed_scale, y, &mouse->scale_accum_y);
+            x *= mouse->normal_speed_scale;
+            y *= mouse->normal_speed_scale;
         }
         xrel = x;
         yrel = y;
@@ -466,10 +457,14 @@ SDL_PrivateSendMouseMotion(SDL_Window * window, SDL_MouseID mouseID, int relativ
         /* Set us pending (or clear during a normal mouse movement event) as having triggered */
         mouse->was_touch_mouse_events = (mouseID == SDL_TOUCH_MOUSEID)? SDL_TRUE : SDL_FALSE;
         event.motion.state = GetButtonState(mouse);
-        event.motion.x = mouse->x;
-        event.motion.y = mouse->y;
-        event.motion.xrel = xrel;
-        event.motion.yrel = yrel;
+        event.motion.x = (int)mouse->x;
+        event.motion.y = (int)mouse->y;
+        event.motion.xrel = (int)xrel;
+        event.motion.yrel = (int)yrel;
+        event.motion.xFloat = mouse->x;
+        event.motion.yFloat = mouse->y;
+        event.motion.xrelFloat = xrel;
+        event.motion.yrelFloat = yrel;
         posted = (SDL_PushEvent(&event) > 0);
     }
     if (relative) {
@@ -623,8 +618,10 @@ SDL_PrivateSendMouseButton(SDL_Window * window, SDL_MouseID mouseID, Uint8 state
         event.button.state = state;
         event.button.button = button;
         event.button.clicks = (Uint8) SDL_min(clicks, 255);
-        event.button.x = mouse->x;
-        event.button.y = mouse->y;
+        event.button.x = (int)mouse->x;
+        event.button.y = (int)mouse->y;
+        event.button.xFloat = mouse->x;
+        event.button.yFloat = mouse->y;
         posted = (SDL_PushEvent(&event) > 0);
     }
 
@@ -770,6 +767,20 @@ SDL_GetMouseState(int *x, int *y)
     SDL_Mouse *mouse = SDL_GetMouse();
 
     if (x) {
+        *x = (int)mouse->x;
+    }
+    if (y) {
+        *y = (int)mouse->y;
+    }
+    return GetButtonState(mouse);
+}
+
+Uint32
+SDL_GetMouseStateFloat(float *x, float *y)
+{
+    SDL_Mouse *mouse = SDL_GetMouse();
+
+    if (x) {
         *x = mouse->x;
     }
     if (y) {
@@ -778,8 +789,40 @@ SDL_GetMouseState(int *x, int *y)
     return GetButtonState(mouse);
 }
 
+static int
+RemoveIntegralPart(float* value)
+{
+    int integral_part;
+    if (*value >= 0.0f) {
+        integral_part = (int)SDL_floor(*value);
+    } else {
+        integral_part = (int)SDL_ceil(*value);
+    }
+    *value -= integral_part;
+    return integral_part;
+}
+
 Uint32
 SDL_GetRelativeMouseState(int *x, int *y)
+{
+    SDL_Mouse *mouse = SDL_GetMouse();
+
+    if (x) {
+        /* e.g. if internal state is 1.5f, we'd return (int)1 here and
+           update the internal state to 0.5f
+         */
+        *x = RemoveIntegralPart(&mouse->xdelta);
+    }
+    if (y) {
+        *y = RemoveIntegralPart(&mouse->ydelta);
+    }
+    mouse->xdelta = 0;
+    mouse->ydelta = 0;
+    return GetButtonState(mouse);
+}
+
+Uint32
+SDL_GetRelativeMouseStateFloat(float *x, float *y)
 {
     SDL_Mouse *mouse = SDL_GetMouse();
 
@@ -894,8 +937,6 @@ SDL_SetRelativeMouseMode(SDL_bool enabled)
         }
     }
     mouse->relative_mode = enabled;
-    mouse->scale_accum_x = 0.0f;
-    mouse->scale_accum_y = 0.0f;
 
     if (enabled) {
         /* Update cursor visibility before we potentially warp the mouse */

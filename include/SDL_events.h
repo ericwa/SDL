@@ -270,6 +270,10 @@ typedef struct SDL_MouseMotionEvent
     Sint32 y;           /**< Y coordinate, relative to window */
     Sint32 xrel;        /**< The relative motion in the X direction */
     Sint32 yrel;        /**< The relative motion in the Y direction */
+    float xFloat;
+    float yFloat;
+    float xrelFloat;
+    float yrelFloat;
 } SDL_MouseMotionEvent;
 
 /**
@@ -287,6 +291,8 @@ typedef struct SDL_MouseButtonEvent
     Uint8 padding1;
     Sint32 x;           /**< X coordinate, relative to window */
     Sint32 y;           /**< Y coordinate, relative to window */
+    float xFloat;
+    float yFloat;
 } SDL_MouseButtonEvent;
 
 /**

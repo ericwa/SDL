@@ -41,7 +41,7 @@ typedef struct
 
 typedef struct
 {
-    int last_x, last_y;
+    float last_x, last_y;
     Uint32 last_timestamp;
     Uint8 click_count;
 } SDL_MouseClickState;
@@ -81,11 +81,12 @@ typedef struct
     /* Data common to all mice */
     SDL_MouseID mouseID;
     SDL_Window *focus;
-    int x;
-    int y;
-    int xdelta;
-    int ydelta;
-    int last_x, last_y;         /* the last reported x and y coordinates */
+    float x;
+    float y;
+    float xdelta;
+    float ydelta;
+    float last_x, last_y;         /* the last reported x and y coordinates */
+
     float accumulated_wheel_x;
     float accumulated_wheel_y;
     SDL_bool has_position;
@@ -93,8 +94,6 @@ typedef struct
     SDL_bool relative_mode_warp;
     float normal_speed_scale;
     float relative_speed_scale;
-    float scale_accum_x;
-    float scale_accum_y;
     Uint32 double_click_time;
     int double_click_radius;
     SDL_bool touch_mouse_events;
@@ -131,8 +130,11 @@ extern void SDL_SetDefaultCursor(SDL_Cursor * cursor);
 /* Set the mouse focus window */
 extern void SDL_SetMouseFocus(SDL_Window * window);
 
-/* Send a mouse motion event */
+/* Send a mouse motion event (deprecated in favor of SDL_SendMouseMotionFloat) */
 extern int SDL_SendMouseMotion(SDL_Window * window, SDL_MouseID mouseID, int relative, int x, int y);
+
+/* Send a mouse motion event */
+extern int SDL_SendMouseMotionFloat(SDL_Window * window, SDL_MouseID mouseID, int relative, float x, float y);
 
 /* Send a mouse button event */
 extern int SDL_SendMouseButton(SDL_Window * window, SDL_MouseID mouseID, Uint8 state, Uint8 button);

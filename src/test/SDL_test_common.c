@@ -2238,6 +2238,7 @@ SDLTest_CommonDrawWindowInfo(SDL_Renderer * renderer, SDL_Window * window, int *
     int textY = 0;
     const int lineHeight = 10;
     int x, y, w, h;
+    float x_float, y_float;
     SDL_Rect rect;
     SDL_DisplayMode mode;
     float ddpi, hdpi, vdpi;
@@ -2382,8 +2383,8 @@ SDLTest_CommonDrawWindowInfo(SDL_Renderer * renderer, SDL_Window * window, int *
 
     SDL_SetRenderDrawColor(renderer, 170, 170, 170, 255);
 
-    flags = SDL_GetMouseState(&x, &y);
-    SDL_snprintf(text, sizeof(text), "SDL_GetMouseState: %d,%d ", x, y);
+    flags = SDL_GetMouseStateFloat(&x_float, &y_float);
+    SDL_snprintf(text, sizeof(text), "SDL_GetMouseStateFloat: %f,%f ", x_float, y_float);
     SDLTest_PrintButtonMask(text, sizeof(text), flags);
     SDLTest_DrawString(renderer, 0, textY, text);
     textY += lineHeight;
