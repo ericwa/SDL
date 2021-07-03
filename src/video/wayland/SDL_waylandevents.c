@@ -387,9 +387,9 @@ pointer_handle_motion(void *data, struct wl_pointer *pointer,
     input->sx_w = sx_w;
     input->sy_w = sy_w;
     if (input->pointer_focus) {
-        const int sx = wl_fixed_to_int(sx_w);
-        const int sy = wl_fixed_to_int(sy_w);
-        SDL_SendMouseMotion(window->sdlwindow, 0, 0, sx, sy);
+        const float sx = wl_fixed_to_double(sx_w);
+        const float sy = wl_fixed_to_double(sy_w);
+        SDL_SendMouseMotionFloat(window->sdlwindow, 0, 0, sx, sy);
     }
 }
 
@@ -1772,21 +1772,12 @@ relative_pointer_handle_relative_motion(void *data,
     SDL_WindowData *window = input->pointer_focus;
     double dx_unaccel;
     double dy_unaccel;
-    double dx;
-    double dy;
 
     dx_unaccel = wl_fixed_to_double(dx_unaccel_w);
     dy_unaccel = wl_fixed_to_double(dy_unaccel_w);
 
-    /* Add left over fraction from last event. */
-    dx_unaccel += input->dx_frac;
-    dy_unaccel += input->dy_frac;
-
-    input->dx_frac = modf(dx_unaccel, &dx);
-    input->dy_frac = modf(dy_unaccel, &dy);
-
     if (input->pointer_focus && d->relative_mouse_mode) {
-        SDL_SendMouseMotion(window->sdlwindow, 0, 1, (int)dx, (int)dy);
+        SDL_SendMouseMotionFloat(window->sdlwindow, 0, 1, dx_unaccel, dy_unaccel);
     }
 }
 

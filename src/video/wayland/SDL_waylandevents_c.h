@@ -60,9 +60,6 @@ struct SDL_WaylandInput {
     wl_fixed_t sx_w;
     wl_fixed_t sy_w;
 
-    double dx_frac;
-    double dy_frac;
-
     struct {
         struct xkb_keymap *keymap;
         struct xkb_state *state;
