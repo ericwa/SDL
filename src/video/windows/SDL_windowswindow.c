@@ -46,7 +46,7 @@
 #define SWP_NOCOPYBITS 0
 #endif
 
-/* #define HIGHDPI_DEBUG */
+#define HIGHDPI_DEBUG
 
 /* Fake window to help with DirectInput events. */
 HWND SDL_HelperWindow = NULL;

@@ -52,7 +52,7 @@
 #include "wmmsg.h"
 #endif
 
-/* #define HIGHDPI_DEBUG */
+#define HIGHDPI_DEBUG
 
 /* Masks for processing the windows KEYDOWN and KEYUP messages */
 #define REPEATED_KEYMASK    (1<<30)
