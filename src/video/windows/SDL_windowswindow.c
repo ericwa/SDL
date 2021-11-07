@@ -801,7 +801,7 @@ WIN_SetWindowFullscreen(_THIS, SDL_Window * window, SDL_VideoDisplay * display, 
             style &= ~WS_MAXIMIZE;
         }
 
-        data->scaling_dpi = 96;
+        //data->scaling_dpi = 96;
     } else {
         BOOL menu;
 
@@ -816,7 +816,7 @@ WIN_SetWindowFullscreen(_THIS, SDL_Window * window, SDL_VideoDisplay * display, 
             data->windowed_mode_was_maximized = SDL_FALSE;
         }
 
-        data->scaling_dpi = WIN_GetDPIForHWND(videodata, data->hwnd);
+        //data->scaling_dpi = WIN_GetDPIForHWND(videodata, data->hwnd);
 
         menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
         WIN_AdjustWindowRectWithStyle(window, style, menu, &x, &y, &w, &h, SDL_FALSE);
