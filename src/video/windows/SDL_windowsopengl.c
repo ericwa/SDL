@@ -676,6 +676,8 @@ WIN_GL_CreateContext(_THIS, SDL_Window * window)
         _this->GL_UnloadLibrary = WIN_GLES_UnloadLibrary;
         _this->GL_CreateContext = WIN_GLES_CreateContext;
         _this->GL_MakeCurrent = WIN_GLES_MakeCurrent;
+        // FIXME:
+        //_this->GL_GetDrawableSize = WIN_GLES_GetDrawableSize;
         _this->GL_SetSwapInterval = WIN_GLES_SetSwapInterval;
         _this->GL_GetSwapInterval = WIN_GLES_GetSwapInterval;
         _this->GL_SwapWindow = WIN_GLES_SwapWindow;

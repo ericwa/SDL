@@ -213,6 +213,8 @@ WIN_CreateDevice(int devindex)
     device->GL_UnloadLibrary = WIN_GLES_UnloadLibrary;
     device->GL_CreateContext = WIN_GLES_CreateContext;
     device->GL_MakeCurrent = WIN_GLES_MakeCurrent;
+    // FIXME:
+    //device->GL_GetDrawableSize = WIN_GLES_GetDrawableSize;
     device->GL_SetSwapInterval = WIN_GLES_SetSwapInterval;
     device->GL_GetSwapInterval = WIN_GLES_GetSwapInterval;
     device->GL_SwapWindow = WIN_GLES_SwapWindow;

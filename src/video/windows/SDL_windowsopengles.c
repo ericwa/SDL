@@ -40,6 +40,7 @@ WIN_GLES_LoadLibrary(_THIS, const char *path) {
         _this->GL_UnloadLibrary = WIN_GL_UnloadLibrary;
         _this->GL_CreateContext = WIN_GL_CreateContext;
         _this->GL_MakeCurrent = WIN_GL_MakeCurrent;
+        _this->GL_GetDrawableSize = WIN_GL_GetDrawableSize;
         _this->GL_SetSwapInterval = WIN_GL_SetSwapInterval;
         _this->GL_GetSwapInterval = WIN_GL_GetSwapInterval;
         _this->GL_SwapWindow = WIN_GL_SwapWindow;
@@ -72,6 +73,7 @@ WIN_GLES_CreateContext(_THIS, SDL_Window * window)
         _this->GL_UnloadLibrary = WIN_GL_UnloadLibrary;
         _this->GL_CreateContext = WIN_GL_CreateContext;
         _this->GL_MakeCurrent = WIN_GL_MakeCurrent;
+        _this->GL_GetDrawableSize = WIN_GL_GetDrawableSize;
         _this->GL_SetSwapInterval = WIN_GL_SetSwapInterval;
         _this->GL_GetSwapInterval = WIN_GL_GetSwapInterval;
         _this->GL_SwapWindow = WIN_GL_SwapWindow;
