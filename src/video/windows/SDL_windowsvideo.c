@@ -264,6 +264,16 @@ WIN_SetAllowHighDPI(_THIS)
     {
         data->highdpi_enabled = SDL_TRUE;
     }
+
+    // TODO: enabling DPI awareness through Windows Explorer
+    // (right click .exe -> Properties -> Compatibility -> High DPI Settings -> 
+    // check "Override high DPI Scaling behaviour", select Application) gives
+    // a DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE context (at least on Windows 10 21H1)
+    if (data->AreDpiAwarenessContextsEqual
+        && data->GetThreadDpiAwarenessContext
+        && data->AreDpiAwarenessContextsEqual(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE, data->GetThreadDpiAwarenessContext())) {
+        data->highdpi_enabled = SDL_TRUE;
+    }
 }
 
 int
