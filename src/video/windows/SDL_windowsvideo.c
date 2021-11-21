@@ -251,9 +251,10 @@ WIN_SetAllowHighDPI(_THIS)
     SDL_VideoData *data = SDL_static_cast(SDL_VideoData *, _this->driverdata);
 
     // Declare DPI aware (may have been done in external code or a manifest, as well)
-    if (data->SetThreadDpiAwarenessContext) {
-        /* Windows 10 Creators Update+ */
-        data->SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    if (data->SetProcessDpiAwarenessContext) {
+        // NOTE: SetThreadDpiAwarenessContext doesn't work here with OpenGL - the OpenGL contents
+        // end up still getting OS scaled. (tested on Windows 10 21H1 19043.1348, NVIDIA 496.49)
+        data->SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     }
 
     // Check for PMv2 context
