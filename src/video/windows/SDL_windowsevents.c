@@ -1179,9 +1179,9 @@ WIN_WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             SDL_SendWindowEvent(data->window, SDL_WINDOWEVENT_RESIZED, w, h);
 
 #ifdef HIGHDPI_DEBUG
-            SDL_Log("WM_WINDOWPOSCHANGED: Windows client rect (pixels): (%d, %d) (%d x %d)\tSDL client rect (points): (%d, %d) (%d x %d)",
+            SDL_Log("WM_WINDOWPOSCHANGED: Windows client rect (pixels): (%d, %d) (%d x %d)\tSDL client rect (points): (%d, %d) (%d x %d) cached dpi %d, windows reported dpi %d",
                 rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
-                x, y, w, h);
+                x, y, w, h, data->scaling_dpi, data->videodata->GetDpiForWindow ? data->videodata->GetDpiForWindow(data->hwnd) : 0);
 #endif
 
             /* Forces a WM_PAINT event */
