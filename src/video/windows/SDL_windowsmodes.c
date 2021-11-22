@@ -30,7 +30,7 @@
 #define CDS_FULLSCREEN 0
 #endif
 
-/* #define DEBUG_MODES */
+#define DEBUG_MODES
 
 static void
 WIN_UpdateDisplayMode(_THIS, LPCWSTR deviceName, DWORD index, SDL_DisplayMode * mode)

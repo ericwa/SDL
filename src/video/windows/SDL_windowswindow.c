@@ -121,7 +121,7 @@ out: window rect, including frame (in Windows coordinates)
 Can be called before HWND is created.
 */
 static void
-WIN_AdjustWindowRectWithStyle(SDL_Window *window, DWORD style, BOOL menu, int *x, int *y, int *width, int *height, SDL_bool use_current)
+WIN_AdjustWindowRectWithStyle(SDL_Window *window, DWORD style, BOOL menu, int *x, int *y, int *width, int *height, SDL_bool use_current, SDL_bool force_ignore_window_dpi)
 {
     SDL_WindowData *data = (SDL_WindowData *)window->driverdata;
     SDL_VideoData* videodata = SDL_GetVideoDevice() ? SDL_GetVideoDevice()->driverdata : NULL;
@@ -143,8 +143,11 @@ WIN_AdjustWindowRectWithStyle(SDL_Window *window, DWORD style, BOOL menu, int *x
        
        data is NULL only when first creating the window
     */
-    if (data) {
+    if (data && !force_ignore_window_dpi) {
         dpi = data->scaling_dpi;
+    }
+    if (data && force_ignore_window_dpi) {
+        SDL_Log("WIN_AdjustWindowRectWithStyle: using dpi %d, was going to use %d but told not to", dpi, data->scaling_dpi);
     }
 
     *width = MulDiv(*width, dpi, 96);
@@ -184,7 +187,7 @@ WIN_AdjustWindowRect(SDL_Window *window, int *x, int *y, int *width, int *height
 
     style = GetWindowLong(hwnd, GWL_STYLE);
     menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
-    WIN_AdjustWindowRectWithStyle(window, style, menu, x, y, width, height, use_current);
+    WIN_AdjustWindowRectWithStyle(window, style, menu, x, y, width, height, use_current, SDL_FALSE);
 }
 
 static void
@@ -385,7 +388,7 @@ WIN_CreateWindow(_THIS, SDL_Window * window)
     style |= GetWindowStyle(window);
 
     /* Figure out what the window area will be */
-    WIN_AdjustWindowRectWithStyle(window, style, FALSE, &x, &y, &w, &h, SDL_FALSE);
+    WIN_AdjustWindowRectWithStyle(window, style, FALSE, &x, &y, &w, &h, SDL_FALSE, SDL_FALSE);
 
     hwnd =
         CreateWindow(SDL_Appname, TEXT(""), style, x, y, w, h, parent, NULL,
@@ -749,6 +752,9 @@ WIN_RestoreWindow(_THIS, SDL_Window * window)
     data->expected_resize = SDL_FALSE;
 }
 
+/*
+ *
+ */
 void
 WIN_SetWindowFullscreen(_THIS, SDL_Window * window, SDL_VideoDisplay * display, SDL_bool fullscreen)
 {
@@ -815,11 +821,14 @@ WIN_SetWindowFullscreen(_THIS, SDL_Window * window, SDL_VideoDisplay * display, 
             style |= WS_MAXIMIZE;
             data->windowed_mode_was_maximized = SDL_FALSE;
         }
-
-        //data->scaling_dpi = WIN_GetDPIForHWND(videodata, data->hwnd);
+        
+        int curr_dpi = WIN_GetDPIForHWND(videodata, data->hwnd);
+        SDL_Log("Leaving fullscreen, current window dpi is %d", curr_dpi);
 
         menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
-        WIN_AdjustWindowRectWithStyle(window, style, menu, &x, &y, &w, &h, SDL_FALSE);
+
+
+        WIN_AdjustWindowRectWithStyle(window, style, menu, &x, &y, &w, &h, SDL_FALSE, SDL_TRUE);
     }
     SetWindowLong(hwnd, GWL_STYLE, style);
     data->expected_resize = SDL_TRUE;
