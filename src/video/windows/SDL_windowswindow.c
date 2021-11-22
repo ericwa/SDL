@@ -823,11 +823,18 @@ WIN_SetWindowFullscreen(_THIS, SDL_Window * window, SDL_VideoDisplay * display, 
         }
         
         int curr_dpi = WIN_GetDPIForHWND(videodata, data->hwnd);
-        SDL_Log("Leaving fullscreen, current window dpi is %d", curr_dpi);
+        
+        UINT dpi_x = 0, dpi_y = 0;
+        videodata->GetDpiForMonitor(displaydata->MonitorHandle, MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y);
+        int mon_dpi = dpi_x;
 
         menu = (style & WS_CHILDWINDOW) ? FALSE : (GetMenu(hwnd) != NULL);
 
+        //data->scaling_dpi = mon_dpi;
 
+        SDL_Log("Leaving fullscreen, current window dpi is %d mon dpi %d", curr_dpi, mon_dpi);
+
+        //WIN_AdjustWindowRectWithStyle(window, style, menu, &x, &y, &w, &h, SDL_FALSE, SDL_FALSE);
         WIN_AdjustWindowRectWithStyle(window, style, menu, &x, &y, &w, &h, SDL_FALSE, SDL_TRUE);
     }
     SetWindowLong(hwnd, GWL_STYLE, style);
