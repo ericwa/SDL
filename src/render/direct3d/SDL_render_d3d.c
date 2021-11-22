@@ -343,6 +343,7 @@ D3D_WindowEvent(SDL_Renderer * renderer, const SDL_WindowEvent *event)
 
     if (event->event == SDL_WINDOWEVENT_SIZE_CHANGED) {
         data->updateSize = SDL_TRUE;
+        D3D_ActivateRenderer(renderer);
     }
 }
 
