@@ -1163,12 +1163,19 @@ WIN_UpdateClipCursor(SDL_Window *window)
                 ClientToScreen(data->hwnd, (LPPOINT) & rect);
                 ClientToScreen(data->hwnd, (LPPOINT) & rect + 1);
                 if (window->mouse_rect.w > 0 && window->mouse_rect.h > 0) {
+                    SDL_Rect mouse_rect_win_client;
                     RECT mouse_rect, intersection;
 
-                    mouse_rect.left = rect.left + window->mouse_rect.x;
-                    mouse_rect.top = rect.top + window->mouse_rect.y;
-                    mouse_rect.right = mouse_rect.left + window->mouse_rect.w - 1;
-                    mouse_rect.bottom = mouse_rect.top + window->mouse_rect.h - 1;
+                    /* mouse_rect_win_client is the mouse rect in Windows client space */
+                    mouse_rect_win_client = window->mouse_rect;
+                    WIN_ClientPointFromSDL(window, &mouse_rect_win_client.x, &mouse_rect_win_client.y);
+                    WIN_ClientPointFromSDL(window, &mouse_rect_win_client.w, &mouse_rect_win_client.h);
+
+                    /* mouse_rect is the rect in Windows screen space */
+                    mouse_rect.left = rect.left + mouse_rect_win_client.x;
+                    mouse_rect.top = rect.top + mouse_rect_win_client.y;
+                    mouse_rect.right = mouse_rect.left + mouse_rect_win_client.w - 1;
+                    mouse_rect.bottom = mouse_rect.top + mouse_rect_win_client.h - 1;
                     if (IntersectRect(&intersection, &rect, &mouse_rect)) {
                         SDL_memcpy(&rect, &intersection, sizeof(rect));
                     } else if ((window->flags & SDL_WINDOW_MOUSE_GRABBED) != 0) {
