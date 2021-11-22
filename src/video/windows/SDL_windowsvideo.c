@@ -225,6 +225,7 @@ WIN_CreateDevice(int devindex)
     device->Vulkan_UnloadLibrary = WIN_Vulkan_UnloadLibrary;
     device->Vulkan_GetInstanceExtensions = WIN_Vulkan_GetInstanceExtensions;
     device->Vulkan_CreateSurface = WIN_Vulkan_CreateSurface;
+    device->Vulkan_GetDrawableSize = WIN_GL_GetDrawableSize;
 #endif
 
     device->StartTextInput = WIN_StartTextInput;
